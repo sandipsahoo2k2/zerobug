@@ -84,7 +84,7 @@ and the workflow then needs a `astral-sh/setup-uv@v5` step before the analysis s
 | --- | --- |
 | `JIRA_EMAIL` | Atlassian account email |
 | `JIRA_API_TOKEN` | Atlassian API token |
-| `COPILOT_TOKEN` | **Required.** Classic GitHub PAT belonging to an account with a Copilot seat — the analysis runs as a headless Copilot CLI session. The workflow fails fast if it is missing. |
+| `COPILOT_TOKEN` | **Required.** Fine-grained PAT with the **Copilot Requests** account permission, from an account with a Copilot seat. The analysis runs as a headless Copilot CLI session; the workflow fails fast if this is missing. |
 
 There is no fallback engine. GitHub Models used to serve as one; it is being retired and now
 answers `410 github_models_retirement_brownout`, and a plan produced without real access to the
