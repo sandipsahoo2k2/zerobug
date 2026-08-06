@@ -19,7 +19,6 @@ on:
 
 permissions:
   contents: write
-  models: read
 
 concurrency:
   group: zerobug-${{ inputs.jira_id }}
@@ -60,21 +59,23 @@ jobs:
         working-directory: .github/zerobug
         run: npm install --omit=dev --no-audit --no-fund
 
-      - name: Pick analysis engine
-        id: engine
+      - name: Require a Copilot token
         env:
           COPILOT_TOKEN: ${{ secrets.COPILOT_TOKEN }}
         run: |
-          if [ -n "$COPILOT_TOKEN" ]; then
-            echo "engine=copilot" >> "$GITHUB_OUTPUT"
-          else
-            echo "engine=models" >> "$GITHUB_OUTPUT"
-            echo "::notice::COPILOT_TOKEN not set — using the GitHub Models API instead of a Copilot CLI session."
+          if [ -z "$COPILOT_TOKEN" ]; then
+            echo "::error::COPILOT_TOKEN is not set. The analysis runs as a GitHub Copilot CLI session and needs a token from an account with a Copilot seat."
+            exit 1
           fi
 
       - name: Install GitHub Copilot CLI
-        if: steps.engine.outputs.engine == 'copilot'
         run: npm install -g @github/copilot
+
+      - name: Verify the CLI is authenticated
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_TOKEN }}
+          COPILOT_CLI_TOKEN: ${{ secrets.COPILOT_TOKEN }}
+        run: copilot --version
 
       - name: Fetch the stored plan (publish mode)
         if: inputs.mode == 'publish'
@@ -90,9 +91,7 @@ jobs:
           MODE: ${{ inputs.mode }}
           PLAN_OUTPUT: ${{ runner.temp }}/plan.json
           EXISTING_PLAN_PATH: ${{ runner.temp }}/existing-plan.json
-          ZEROBUG_ENGINE: ${{ steps.engine.outputs.engine }}
-          ZEROBUG_MODEL: ${{ vars.ZEROBUG_MODEL }}
-          # Jira MCP server (preferred)
+          # Jira MCP server (optional — empty means the REST path)
           JIRA_MCP_COMMAND: ${{ vars.JIRA_MCP_COMMAND }}
           JIRA_MCP_ARGS: ${{ vars.JIRA_MCP_ARGS }}
           # Jira REST fallback / credentials the MCP server itself reads
@@ -101,9 +100,10 @@ jobs:
           JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
           JIRA_USERNAME: ${{ secrets.JIRA_EMAIL }}
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-          # Copilot CLI / GitHub Models auth
-          GH_TOKEN: ${{ secrets.COPILOT_TOKEN || github.token }}
-          GITHUB_TOKEN: ${{ secrets.COPILOT_TOKEN || github.token }}
+          # Copilot CLI auth — the CLI reads GH_TOKEN / COPILOT_CLI_TOKEN
+          GH_TOKEN: ${{ secrets.COPILOT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.COPILOT_TOKEN }}
+          COPILOT_CLI_TOKEN: ${{ secrets.COPILOT_TOKEN }}
           COPILOT_TIMEOUT_MS: '900000'
         run: node run.mjs
 
@@ -133,7 +133,7 @@ jobs:
         if: always()
         run: |
           echo "## ZeroBug — $JIRA_ID" >> "$GITHUB_STEP_SUMMARY"
-          echo "Mode: ${{ inputs.mode }} · Engine: ${{ steps.engine.outputs.engine }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Mode: ${{ inputs.mode }} · Engine: GitHub Copilot CLI session" >> "$GITHUB_STEP_SUMMARY"
           if [ -f "$RUNNER_TEMP/plan.json" ]; then
             echo '```json' >> "$GITHUB_STEP_SUMMARY"
             head -c 4000 "$RUNNER_TEMP/plan.json" >> "$GITHUB_STEP_SUMMARY"

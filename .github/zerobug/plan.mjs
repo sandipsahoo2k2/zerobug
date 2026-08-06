@@ -57,7 +57,11 @@ Use 3 to 8 steps. Every path you cite must exist in this repository.`;
 
 /** Pulls the first balanced JSON object out of a model response. */
 function extractJson(text) {
-  const cleaned = String(text).replace(/```(?:json)?/gi, '');
+  // The CLI decorates its output with ANSI colour codes, which are not valid JSON.
+  const cleaned = String(text)
+    // eslint-disable-next-line no-control-regex
+    .replace(/\[[0-9;]*[A-Za-z]/g, '')
+    .replace(/```(?:json)?/gi, '');
   const start = cleaned.indexOf('{');
   if (start === -1) throw new Error('No JSON object in the engine response.');
 
@@ -101,31 +105,6 @@ function runCopilotCli(prompt) {
   return result.stdout;
 }
 
-async function runGithubModels(prompt) {
-  const model = env.ZEROBUG_MODEL || 'openai/gpt-4.1';
-  const response = await fetch('https://models.github.ai/inference/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${env.GITHUB_TOKEN}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.2,
-      messages: [
-        { role: 'system', content: 'You output a single JSON object and nothing else.' },
-        { role: 'user', content: prompt },
-      ],
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`GitHub Models ${response.status}: ${await response.text()}`);
-  }
-  const data = await response.json();
-  return data.choices?.[0]?.message?.content ?? '';
-}
-
 const asArray = (value) => (Array.isArray(value) ? value : []);
 
 function normalise(raw, issue, engine) {
@@ -155,22 +134,15 @@ function normalise(raw, issue, engine) {
   };
 }
 
-/** Runs the analysis and returns a plan object ready to serialise. */
+/**
+ * Runs a headless GitHub Copilot CLI session in the checkout and returns the plan.
+ * There is deliberately no fallback engine: a plan that did not come from a session
+ * with real access to the code is not worth writing into a Jira ticket.
+ */
 export async function generatePlan(issue, repoContext) {
   const prompt = buildPrompt(issue, repoContext);
-  const preferred = (env.ZEROBUG_ENGINE || 'copilot').toLowerCase();
-
-  if (preferred === 'copilot') {
-    try {
-      console.log('Engine: GitHub Copilot CLI session');
-      return normalise(extractJson(runCopilotCli(prompt)), issue, 'copilot-cli');
-    } catch (error) {
-      console.warn(`Copilot CLI unusable (${error.message}). Falling back to GitHub Models.`);
-    }
-  }
-
-  console.log('Engine: GitHub Models API');
-  return normalise(extractJson(await runGithubModels(prompt)), issue, `github-models:${env.ZEROBUG_MODEL || 'openai/gpt-4.1'}`);
+  console.log('Engine: GitHub Copilot CLI session');
+  return normalise(extractJson(runCopilotCli(prompt)), issue, 'copilot-cli');
 }
 
 /** Renders the plan as the Markdown written back into the Jira description. */

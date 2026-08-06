@@ -62,7 +62,6 @@ Open <http://localhost:4200>.
 | Variable | Example | Meaning |
 | --- | --- | --- |
 | `JIRA_BASE_URL` | `https://acme.atlassian.net` | Jira site, used by the MCP server and the REST fallback |
-| `ZEROBUG_MODEL` | `openai/gpt-4.1` | Model used only by the GitHub Models fallback |
 | `JIRA_MCP_COMMAND` | *(leave empty)* | Optional. Command that launches a Jira MCP server over stdio |
 | `JIRA_MCP_ARGS` | *(leave empty)* | Optional. Comma-separated args for that command |
 
@@ -85,7 +84,11 @@ and the workflow then needs a `astral-sh/setup-uv@v5` step before the analysis s
 | --- | --- |
 | `JIRA_EMAIL` | Atlassian account email |
 | `JIRA_API_TOKEN` | Atlassian API token |
-| `COPILOT_TOKEN` | *Optional.* GitHub PAT of an account with a Copilot seat. Present → Copilot CLI session. Absent → GitHub Models API with the built-in `GITHUB_TOKEN`. |
+| `COPILOT_TOKEN` | **Required.** Classic GitHub PAT belonging to an account with a Copilot seat — the analysis runs as a headless Copilot CLI session. The workflow fails fast if it is missing. |
+
+There is no fallback engine. GitHub Models used to serve as one; it is being retired and now
+answers `410 github_models_retirement_brownout`, and a plan produced without real access to the
+code is not worth writing into a ticket anyway.
 
 ### 4. Enable GitHub Pages
 
