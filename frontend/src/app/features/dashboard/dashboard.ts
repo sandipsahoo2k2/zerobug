@@ -55,11 +55,6 @@ export class Dashboard {
     void this.zeroBug.loadExistingPlan(this.jiraIdInput());
   }
 
-  loadDemo(): void {
-    this.jiraIdInput.set('DEMO-101');
-    void this.zeroBug.loadExistingPlan('DEMO-101');
-  }
-
   publish(): void {
     if (!this.canPublish()) return;
     void this.zeroBug.publishToJira();

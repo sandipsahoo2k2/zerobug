@@ -2,7 +2,6 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { FixPlan } from '../models/plan.model';
 import { JobPhase, WorkflowRun } from '../models/run.model';
-import { DemoPlanService } from './demo-plan.service';
 import { GithubApiService } from './github-api.service';
 
 const POLL_INTERVAL_MS = 4_000;
@@ -19,7 +18,6 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 @Injectable({ providedIn: 'root' })
 export class ZeroBugService {
   private readonly github = inject(GithubApiService);
-  private readonly demo = inject(DemoPlanService);
 
   private readonly phaseState = signal<JobPhase>('idle');
   private readonly runState = signal<WorkflowRun | null>(null);
@@ -66,19 +64,6 @@ export class ZeroBugService {
 
     this.reset(jiraId);
     this.phaseState.set('fetching-plan');
-
-    if (this.demo.isDemoId(jiraId)) {
-      this.append('Loading the bundled sample plan…');
-      try {
-        this.planState.set(await firstValueFrom(this.demo.load()));
-        this.phaseState.set('done');
-        this.append('Sample plan loaded. No workflow run was used.');
-      } catch {
-        this.fail('The bundled sample plan could not be read.');
-      }
-      return;
-    }
-
     this.append(`Looking for an existing plan for ${jiraId}…`);
     try {
       this.planState.set(await firstValueFrom(this.github.getPlan(jiraId)));

@@ -138,22 +138,10 @@ cd sample-app && node --test        # 5 pass, defect present
 >
 > A customer also reported a loyalty coupon being rejected on its expiry date, which the rules say should still be valid. Started somewhere in the last few releases; it used to work.
 
-Then enter that issue's key in the dashboard. The same text is kept at
-`.github/zerobug/fixtures/ZB-101.json` for offline runs.
+Then enter that issue's key in the dashboard and press **Analyse defect**.
 
-**Preview what the session will see, without spending an Actions run:**
-
-```bash
-node .github/zerobug/dry-run.mjs ZB-101 .github/zerobug/fixtures/ZB-101.json
-```
-
-This runs the real context gathering and prompt builder and prints the prompt. On this repo it
-surfaces `sample-app/src/pricing.js:18` — the buggy comparison — plus both pricing commits, so
-the analysis starts with the regression already in view.
-
-**See the dashboard render a plan with no token at all:** enter `DEMO-101` and press
-*Load saved plan*. It loads `frontend/public/demo-plan.json`, a real plan for this defect.
-Its `engine` field records how it was produced.
+The context step feeds the session `sample-app/src/pricing.js:18` — the buggy comparison
+itself — along with both pricing commits, so the analysis starts with the regression in view.
 
 ---
 

@@ -74,22 +74,6 @@ button:disabled {
   font-size: 0.85rem;
 }
 
-.demo-hint {
-  margin: 0.9rem 0 0;
-  font-size: 0.82rem;
-  color: var(--muted);
-}
-
-.link {
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--accent);
-  font: inherit;
-  cursor: pointer;
-  text-decoration: underline;
-}
-
 .status {
   background: var(--surface);
   border: 1px solid var(--border);
