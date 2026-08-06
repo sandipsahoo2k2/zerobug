@@ -11,13 +11,19 @@ const git = (args, fallback = '') => {
 const STOP_WORDS = new Set([
   'the', 'and', 'for', 'with', 'when', 'error', 'issue', 'bug', 'defect', 'fails', 'failing',
   'not', 'from', 'that', 'this', 'after', 'before', 'user', 'page', 'should', 'does', 'while',
+  'expected', 'actual', 'steps', 'reproduce', 'instead', 'exactly', 'same', 'thing', 'happens',
+  'also', 'reported', 'being', 'which', 'rules', 'still', 'used', 'work', 'works', 'started',
+  'somewhere', 'last', 'releases', 'gets', 'getting', 'valid', 'until', 'goes', 'checkout',
 ]);
 
 /** Words from the issue worth grepping for: identifiers, CamelCase, dotted paths. */
 function keywords(text, limit = 8) {
   const tokens = String(text ?? '').match(/[A-Za-z_][A-Za-z0-9_.$-]{3,}/g) ?? [];
   const seen = new Map();
-  for (const token of tokens) {
+  for (const rawToken of tokens) {
+    // Sentence punctuation glues onto words ("valid." / "work.") — grepping that finds nothing.
+    const token = rawToken.replace(/[.\-_$]+$/, '');
+    if (token.length < 4) continue;
     const key = token.toLowerCase();
     if (STOP_WORDS.has(key)) continue;
     const interesting = /[A-Z]/.test(token.slice(1)) || token.includes('.') || token.includes('_');
@@ -29,9 +35,20 @@ function keywords(text, limit = 8) {
     .map(([token]) => token);
 }
 
+/** Generated files drown out real signal in both hotspots and grep. */
+const EXCLUDED = [
+  ':!**/package-lock.json',
+  ':!**/yarn.lock',
+  ':!**/pnpm-lock.yaml',
+  ':!**/node_modules/**',
+  ':!**/dist/**',
+  ':!**/*.min.*',
+  ':!**/*.map',
+];
+
 /** Files touched most often lately — a cheap hotspot signal. */
 function hotspots(limit = 15) {
-  const raw = git(['log', '-n', '150', '--name-only', '--pretty=format:']);
+  const raw = git(['log', '-n', '150', '--name-only', '--pretty=format:', '--', '.', ...EXCLUDED]);
   const counts = new Map();
   for (const line of raw.split('\n')) {
     const file = line.trim();
@@ -47,7 +64,7 @@ function hotspots(limit = 15) {
 function grepHits(terms, perTerm = 12) {
   const blocks = [];
   for (const term of terms) {
-    const hits = git(['grep', '-n', '-I', '-i', '--', term]);
+    const hits = git(['grep', '-n', '-I', '-i', '-e', term, '--', '.', ...EXCLUDED]);
     if (!hits) continue;
     blocks.push(`### matches for "${term}"\n${hits.split('\n').slice(0, perTerm).join('\n')}`);
   }

@@ -1,0 +1,7 @@
+{
+  "summary": "Orders of exactly 100.00 are charged full price instead of getting the 10% tier discount",
+  "status": "Open",
+  "priority": "High",
+  "labels": ["pricing", "regression"],
+  "description": "Steps to reproduce:\n1. Add items to a cart until the subtotal is exactly 100.00\n2. Go to checkout\n\nExpected: 10% tier discount is applied, total 90.00 (docs/pricing-rules.md says thresholds are inclusive).\nActual: no discount, total 100.00.\n\nSame thing happens at exactly 500.00 — it gets 10% instead of 20%.\n\nA customer also reported a loyalty coupon being rejected on its expiry date, which the rules say should still be valid. Started somewhere in the last few releases; it used to work."
+}

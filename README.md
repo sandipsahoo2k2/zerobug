@@ -109,6 +109,54 @@ and sent only to `api.github.com`. Jira credentials never reach the browser.
 
 ---
 
+## Try it on the bundled defect
+
+`sample-app/` exists so you can exercise the whole thing without inventing a bug.
+
+**The defect.** `docs/pricing-rules.md` says the 100 and 500 discount thresholds are
+*inclusive* and coupons are valid *up to and including* `expiresAt`. Commit `ff4ddce`
+"refactor(pricing): table-driven tier lookup" — message says *behaviour unchanged* — flipped
+`>=` to `>` and `<=` to `<`. All 5 tests still pass, because none of them sits on a boundary:
+
+```bash
+cd sample-app && node --test        # 5 pass, defect present
+```
+
+**The Jira ticket to raise.** Create a bug in your project with:
+
+> **Summary:** Orders of exactly 100.00 are charged full price instead of getting the 10% tier discount
+>
+> **Description:**
+> Steps to reproduce:
+> 1. Add items to a cart until the subtotal is exactly 100.00
+> 2. Go to checkout
+>
+> Expected: 10% tier discount is applied, total 90.00 (docs/pricing-rules.md says thresholds are inclusive).
+> Actual: no discount, total 100.00.
+>
+> Same thing happens at exactly 500.00 — it gets 10% instead of 20%.
+>
+> A customer also reported a loyalty coupon being rejected on its expiry date, which the rules say should still be valid. Started somewhere in the last few releases; it used to work.
+
+Then enter that issue's key in the dashboard. The same text is kept at
+`.github/zerobug/fixtures/ZB-101.json` for offline runs.
+
+**Preview what the session will see, without spending an Actions run:**
+
+```bash
+node .github/zerobug/dry-run.mjs ZB-101 .github/zerobug/fixtures/ZB-101.json
+```
+
+This runs the real context gathering and prompt builder and prints the prompt. On this repo it
+surfaces `sample-app/src/pricing.js:18` — the buggy comparison — plus both pricing commits, so
+the analysis starts with the regression already in view.
+
+**See the dashboard render a plan with no token at all:** enter `DEMO-101` and press
+*Load saved plan*. It loads `frontend/public/demo-plan.json`, a real plan for this defect.
+Its `engine` field records how it was produced.
+
+---
+
 ## Layout
 
 ```
