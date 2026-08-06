@@ -9,16 +9,14 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: pages
   cancel-in-progress: true
 
 jobs:
-  build:
+  build-and-publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,19 +36,27 @@ jobs:
         # Pages serves the app from /<repo>/, so assets need a matching base href.
         run: npx ng build --base-href "/${{ github.event.repository.name }}/"
 
-      - name: Add .nojekyll
-        run: touch frontend/dist/frontend/browser/.nojekyll
+      # Published to a branch rather than the Pages artifact API so the site works with
+      # Settings -> Pages -> "Deploy from a branch" (gh-pages / root).
+      - name: Publish to gh-pages
+        run: |
+          DIST=frontend/dist/frontend/browser
+          touch "$DIST/.nojekyll"
+          # SPA fallback: hash routing means this is only needed for a stray deep link.
+          cp "$DIST/index.html" "$DIST/404.html"
 
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: frontend/dist/frontend/browser
+          cd "$DIST"
+          git init -q
+          git config user.name "zerobug[bot]"
+          git config user.email "zerobug@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Deploy ${{ github.sha }}"
+          git push -q --force \
+            "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" \
+            HEAD:gh-pages
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Where it lands
+        run: |
+          echo "Published to the gh-pages branch." >> "$GITHUB_STEP_SUMMARY"
+          echo "Settings -> Pages -> Branch: gh-pages / (root)." >> "$GITHUB_STEP_SUMMARY"
+          echo "URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/" >> "$GITHUB_STEP_SUMMARY"
