@@ -7,17 +7,25 @@
  *   loyalty coupon is valid up to and including its expiry date
  */
 
+export const TIERS = [
+  { threshold: 500, rate: 0.2 },
+  { threshold: 100, rate: 0.1 },
+];
+
 /** Discount rate for a subtotal. */
 export function tierRateFor(subtotal) {
-  if (subtotal >= 500) return 0.2;
-  if (subtotal >= 100) return 0.1;
+  for (const tier of TIERS) {
+    if (subtotal > tier.threshold) {
+      return tier.rate;
+    }
+  }
   return 0;
 }
 
 /** True while the coupon is still usable. */
 export function isCouponValid(coupon, now = new Date()) {
   if (!coupon) return false;
-  return now.getTime() <= new Date(coupon.expiresAt).getTime();
+  return now.getTime() < new Date(coupon.expiresAt).getTime();
 }
 
 export function priceOrder({ subtotal, coupon }, now = new Date()) {
