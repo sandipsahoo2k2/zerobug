@@ -1,0 +1,13 @@
+{
+  "name": "zerobug-actions",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Scripts run inside GitHub Actions: Jira MCP read/write + Copilot session -> fix plan",
+  "scripts": {
+    "run": "node run.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.20.0"
+  }
+}

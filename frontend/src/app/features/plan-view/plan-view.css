@@ -1,0 +1,92 @@
+.plan {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+.plan-head h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1.15rem;
+}
+
+.meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.risk {
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.risk-low { color: var(--ok); }
+.risk-medium { color: var(--warn); }
+.risk-high { color: var(--danger); }
+
+.badge {
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ok) 20%, transparent);
+  color: var(--ok);
+  font-size: 0.75rem;
+}
+
+section {
+  margin-top: 1.5rem;
+}
+
+h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+ul.tight {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+ul.tight li {
+  margin-bottom: 0.3rem;
+}
+
+.steps {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.steps > li {
+  margin-bottom: 1.25rem;
+}
+
+.steps h4 {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+}
+
+.steps p {
+  margin: 0 0 0.4rem;
+}
+
+.files code {
+  margin-right: 0.4rem;
+}
+
+.validation {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.validation span {
+  font-weight: 600;
+  color: var(--text);
+}
+
+code {
+  background: var(--code-bg);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  font-size: 0.85em;
+}

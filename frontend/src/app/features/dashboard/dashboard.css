@@ -1,0 +1,138 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.starter {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+.lead {
+  margin: 0 0 1.25rem;
+  color: var(--muted);
+  max-width: 62ch;
+  line-height: 1.55;
+}
+
+.run-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+input {
+  flex: 1 1 220px;
+  padding: 0.65rem 0.8rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+button {
+  padding: 0.65rem 1.1rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #06121f;
+  font-weight: 600;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.warn {
+  margin: 1rem 0 0;
+  color: var(--warn);
+  font-size: 0.85rem;
+}
+
+.status {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+}
+
+.status-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.status-head a {
+  color: var(--accent);
+  font-size: 0.85rem;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ok);
+}
+.dot.spin {
+  background: var(--accent);
+  animation: pulse 1.1s ease-in-out infinite;
+}
+.dot.err {
+  background: var(--danger);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+.error {
+  margin: 0.75rem 0 0;
+  color: var(--danger);
+}
+
+.log {
+  margin: 0.9rem 0 0;
+  padding-left: 1.1rem;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  line-height: 1.7;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.actions .hint {
+  color: var(--muted);
+  font-size: 0.8rem;
+}

@@ -1,0 +1,63 @@
+<section class="starter">
+  <h2>Start work on a defect</h2>
+  <p class="lead">
+    Enter a Jira ID. GitHub Actions checks out the repo, reads the issue through the Jira MCP
+    server, runs a GitHub Copilot session over the code and past commits, and writes back a
+    step-by-step fix plan.
+  </p>
+
+  <form class="run-form" (submit)="$event.preventDefault(); start()">
+    <input
+      name="jiraId"
+      placeholder="ZB-123"
+      autocomplete="off"
+      [value]="jiraIdInput()"
+      (input)="onJiraIdInput($event)"
+      [disabled]="busy()"
+      aria-label="Jira ID"
+    />
+    <button type="submit" class="primary" [disabled]="!canStart()">
+      {{ busy() ? 'Working…' : 'Analyse defect' }}
+    </button>
+    <button type="button" (click)="loadExisting()" [disabled]="busy()">Load saved plan</button>
+  </form>
+
+  @if (!isConfigured()) {
+    <p class="warn">Add your repo details and a GitHub token in Settings to enable dispatch.</p>
+  }
+</section>
+
+<app-settings-panel />
+
+@if (phase() !== 'idle') {
+  <section class="status">
+    <div class="status-head">
+      <span class="dot" [class.spin]="busy()" [class.err]="phase() === 'error'"></span>
+      <strong>{{ phaseLabel() }}</strong>
+      @if (run(); as currentRun) {
+        <a [href]="currentRun.html_url" target="_blank" rel="noopener">run #{{ currentRun.id }} ↗</a>
+      }
+    </div>
+
+    @if (error(); as message) {
+      <p class="error">{{ message }}</p>
+    }
+
+    <ol class="log">
+      @for (line of log(); track $index) {
+        <li>{{ line }}</li>
+      }
+    </ol>
+  </section>
+}
+
+@if (plan(); as currentPlan) {
+  <app-plan-view [plan]="currentPlan" />
+
+  <div class="actions">
+    <button class="primary" (click)="publish()" [disabled]="!canPublish()">
+      {{ currentPlan.jiraUpdated ? 'Re-publish to Jira' : 'Publish plan to Jira' }}
+    </button>
+    <span class="hint">Runs the workflow in publish mode; it writes the plan into the issue description.</span>
+  </div>
+}

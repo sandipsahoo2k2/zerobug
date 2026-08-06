@@ -1,0 +1,141 @@
+name: ZeroBug plan
+
+# The dashboard matches runs by this name, so the Jira ID must stay in it.
+run-name: "ZeroBug ${{ inputs.jira_id }} (${{ inputs.mode }})"
+
+on:
+  workflow_dispatch:
+    inputs:
+      jira_id:
+        description: "Jira issue key, e.g. ZB-123"
+        required: true
+        type: string
+      mode:
+        description: "plan = analyse only, publish = also write the plan into the Jira description"
+        required: true
+        default: plan
+        type: choice
+        options: [plan, publish]
+
+permissions:
+  contents: write
+  models: read
+
+concurrency:
+  group: zerobug-${{ inputs.jira_id }}
+  cancel-in-progress: false
+
+env:
+  PLANS_BRANCH: zerobug-plans
+
+jobs:
+  analyse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # Inputs are never interpolated into shell scripts — they arrive as env vars and
+      # are validated here before anything else uses them.
+      - name: Validate input
+        env:
+          RAW_JIRA_ID: ${{ inputs.jira_id }}
+        run: |
+          JIRA_ID=$(printf '%s' "$RAW_JIRA_ID" | tr '[:lower:]' '[:upper:]' | tr -d '[:space:]')
+          echo "$JIRA_ID" | grep -Eq '^[A-Z][A-Z0-9]+-[0-9]+$' || {
+            echo "::error::Invalid Jira ID: $JIRA_ID"; exit 1;
+          }
+          echo "JIRA_ID=$JIRA_ID" >> "$GITHUB_ENV"
+
+      - name: Checkout with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install script dependencies
+        working-directory: .github/zerobug
+        run: npm install --omit=dev --no-audit --no-fund
+
+      - name: Pick analysis engine
+        id: engine
+        env:
+          COPILOT_TOKEN: ${{ secrets.COPILOT_TOKEN }}
+        run: |
+          if [ -n "$COPILOT_TOKEN" ]; then
+            echo "engine=copilot" >> "$GITHUB_OUTPUT"
+          else
+            echo "engine=models" >> "$GITHUB_OUTPUT"
+            echo "::notice::COPILOT_TOKEN not set — using the GitHub Models API instead of a Copilot CLI session."
+          fi
+
+      - name: Install GitHub Copilot CLI
+        if: steps.engine.outputs.engine == 'copilot'
+        run: npm install -g @github/copilot
+
+      - name: Fetch the stored plan (publish mode)
+        if: inputs.mode == 'publish'
+        run: |
+          git fetch origin "$PLANS_BRANCH" --depth=1 || echo "no plans branch yet"
+          git show "origin/$PLANS_BRANCH:plans/$JIRA_ID.json" > "$RUNNER_TEMP/existing-plan.json" \
+            || echo "no stored plan for $JIRA_ID — a fresh one will be generated"
+
+      - name: Read Jira, run the analysis session, build the plan
+        working-directory: .github/zerobug
+        env:
+          JIRA_ID: ${{ env.JIRA_ID }}
+          MODE: ${{ inputs.mode }}
+          PLAN_OUTPUT: ${{ runner.temp }}/plan.json
+          EXISTING_PLAN_PATH: ${{ runner.temp }}/existing-plan.json
+          ZEROBUG_ENGINE: ${{ steps.engine.outputs.engine }}
+          ZEROBUG_MODEL: ${{ vars.ZEROBUG_MODEL }}
+          # Jira MCP server (preferred)
+          JIRA_MCP_COMMAND: ${{ vars.JIRA_MCP_COMMAND }}
+          JIRA_MCP_ARGS: ${{ vars.JIRA_MCP_ARGS }}
+          # Jira REST fallback / credentials the MCP server itself reads
+          JIRA_BASE_URL: ${{ vars.JIRA_BASE_URL }}
+          JIRA_URL: ${{ vars.JIRA_BASE_URL }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_USERNAME: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          # Copilot CLI / GitHub Models auth
+          GH_TOKEN: ${{ secrets.COPILOT_TOKEN || github.token }}
+          GITHUB_TOKEN: ${{ secrets.COPILOT_TOKEN || github.token }}
+          COPILOT_TIMEOUT_MS: '900000'
+        run: node run.mjs
+
+      - name: Commit the plan to the plans branch
+        run: |
+          git config user.name "zerobug[bot]"
+          git config user.email "zerobug@users.noreply.github.com"
+
+          if git ls-remote --exit-code --heads origin "$PLANS_BRANCH" >/dev/null 2>&1; then
+            git fetch origin "$PLANS_BRANCH:$PLANS_BRANCH"
+            git worktree add "$RUNNER_TEMP/plansdir" "$PLANS_BRANCH"
+          else
+            git worktree add --detach "$RUNNER_TEMP/plansdir"
+            git -C "$RUNNER_TEMP/plansdir" checkout --orphan "$PLANS_BRANCH"
+            git -C "$RUNNER_TEMP/plansdir" rm -rf . >/dev/null 2>&1 || true
+          fi
+
+          mkdir -p "$RUNNER_TEMP/plansdir/plans"
+          cp "$RUNNER_TEMP/plan.json" "$RUNNER_TEMP/plansdir/plans/$JIRA_ID.json"
+
+          git -C "$RUNNER_TEMP/plansdir" add "plans/$JIRA_ID.json"
+          git -C "$RUNNER_TEMP/plansdir" commit -m "ZeroBug: $JIRA_ID (${{ inputs.mode }})" \
+            || echo "plan unchanged"
+          git -C "$RUNNER_TEMP/plansdir" push origin "$PLANS_BRANCH"
+
+      - name: Job summary
+        if: always()
+        run: |
+          echo "## ZeroBug — $JIRA_ID" >> "$GITHUB_STEP_SUMMARY"
+          echo "Mode: ${{ inputs.mode }} · Engine: ${{ steps.engine.outputs.engine }}" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f "$RUNNER_TEMP/plan.json" ]; then
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            head -c 4000 "$RUNNER_TEMP/plan.json" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi

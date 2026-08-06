@@ -1,0 +1,49 @@
+<details class="settings" [open]="!isConfigured()">
+  <summary>
+    Settings
+    <span class="state" [class.ok]="isConfigured()">
+      {{ isConfigured() ? 'configured' : 'token required' }}
+    </span>
+  </summary>
+
+  <div class="grid">
+    <label>
+      Owner
+      <input [value]="settings().owner" (input)="set('owner', $event)" placeholder="octocat" />
+    </label>
+    <label>
+      Repo
+      <input [value]="settings().repo" (input)="set('repo', $event)" placeholder="zerobug" />
+    </label>
+    <label>
+      Workflow file
+      <input [value]="settings().workflowFile" (input)="set('workflowFile', $event)" />
+    </label>
+    <label>
+      Dispatch ref
+      <input [value]="settings().ref" (input)="set('ref', $event)" />
+    </label>
+    <label>
+      Plans branch
+      <input [value]="settings().plansBranch" (input)="set('plansBranch', $event)" />
+    </label>
+    <label class="wide">
+      GitHub token
+      <input
+        type="password"
+        autocomplete="off"
+        [value]="settings().token"
+        (input)="set('token', $event)"
+        placeholder="github_pat_…"
+      />
+    </label>
+  </div>
+
+  <p class="hint">
+    Use a <strong>fine-grained PAT scoped to this repository only</strong>, with
+    <code>Actions: read and write</code> and <code>Contents: read</code>. It is stored in this
+    browser's localStorage and sent only to <code>api.github.com</code>. Jira credentials never
+    touch the browser — they live in the repository's Actions secrets.
+    <button type="button" class="link" (click)="clearToken()">Clear token</button>
+  </p>
+</details>

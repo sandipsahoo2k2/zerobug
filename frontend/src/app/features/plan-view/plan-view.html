@@ -1,0 +1,77 @@
+<article class="plan">
+  <header class="plan-head">
+    <div>
+      <h2>{{ plan().jiraId }} — {{ plan().summary }}</h2>
+      <p class="meta">
+        engine: <strong>{{ plan().engine }}</strong> · generated {{ plan().generatedAt }} ·
+        <span class="risk risk-{{ plan().riskLevel }}">risk: {{ plan().riskLevel }}</span>
+        @if (plan().jiraUpdated) {
+          <span class="badge">Jira updated</span>
+        }
+      </p>
+    </div>
+  </header>
+
+  <section>
+    <h3>Root cause hypothesis</h3>
+    <p>{{ plan().rootCauseHypothesis }}</p>
+  </section>
+
+  @if (plan().suspectFiles.length) {
+    <section>
+      <h3>Suspect files</h3>
+      <ul class="tight">
+        @for (file of plan().suspectFiles; track file.path) {
+          <li><code>{{ file.path }}</code> — {{ file.reason }}</li>
+        }
+      </ul>
+    </section>
+  }
+
+  @if (plan().relatedCommits.length) {
+    <section>
+      <h3>Related commits</h3>
+      <ul class="tight">
+        @for (commit of plan().relatedCommits; track commit.sha) {
+          <li><code>{{ commit.sha }}</code> {{ commit.subject }}</li>
+        }
+      </ul>
+    </section>
+  }
+
+  <section>
+    <h3>Step by step fix</h3>
+    <ol class="steps">
+      @for (step of plan().steps; track step.n) {
+        <li>
+          <h4>{{ step.title }}</h4>
+          <p>{{ step.detail }}</p>
+          @if (step.files.length) {
+            <p class="files">
+              @for (file of step.files; track file) {
+                <code>{{ file }}</code>
+              }
+            </p>
+          }
+          <p class="validation"><span>Verify:</span> {{ step.validation }}</p>
+        </li>
+      }
+    </ol>
+  </section>
+
+  @if (plan().tests.length) {
+    <section>
+      <h3>Tests to add or run</h3>
+      <ul class="tight">
+        @for (test of plan().tests; track test) {
+          <li>{{ test }}</li>
+        }
+      </ul>
+    </section>
+  }
+
+  <section>
+    <h3>Rollback</h3>
+    <p>{{ plan().rollback }}</p>
+  </section>
+</article>
