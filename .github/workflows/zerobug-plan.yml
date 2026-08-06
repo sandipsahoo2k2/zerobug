@@ -71,10 +71,7 @@ jobs:
       - name: Install GitHub Copilot CLI
         run: npm install -g @github/copilot
 
-      - name: Verify the CLI is authenticated
-        env:
-          GH_TOKEN: ${{ secrets.COPILOT_TOKEN }}
-          COPILOT_CLI_TOKEN: ${{ secrets.COPILOT_TOKEN }}
+      - name: Show the CLI version
         run: copilot --version
 
       - name: Fetch the stored plan (publish mode)
