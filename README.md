@@ -62,11 +62,22 @@ Open <http://localhost:4200>.
 | Variable | Example | Meaning |
 | --- | --- | --- |
 | `JIRA_BASE_URL` | `https://acme.atlassian.net` | Jira site, used by the MCP server and the REST fallback |
-| `JIRA_MCP_COMMAND` | `npx` | Command that launches your Jira MCP server over stdio |
-| `JIRA_MCP_ARGS` | `-y,mcp-atlassian` | Comma-separated args for that command |
 | `ZEROBUG_MODEL` | `openai/gpt-4.1` | Model used only by the GitHub Models fallback |
+| `JIRA_MCP_COMMAND` | *(leave empty)* | Optional. Command that launches a Jira MCP server over stdio |
+| `JIRA_MCP_ARGS` | *(leave empty)* | Optional. Comma-separated args for that command |
 
-Leave `JIRA_MCP_COMMAND` empty to skip MCP entirely and use the Jira REST API directly.
+**Start with the MCP variables empty.** `jira.mjs` then talks to the Jira Cloud REST API
+directly — same read and same description write, nothing to install on the runner.
+
+Set them only when you want an MCP server in the loop. The one most people mean,
+`sooperset/mcp-atlassian`, is a **Python** package, so it is `uvx`, not `npx`:
+
+```
+JIRA_MCP_COMMAND = uvx
+JIRA_MCP_ARGS    = mcp-atlassian
+```
+
+and the workflow then needs a `astral-sh/setup-uv@v5` step before the analysis step.
 
 **Settings → Secrets and variables → Actions → Secrets**
 
