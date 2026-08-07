@@ -37,6 +37,9 @@
       @if (run(); as currentRun) {
         <a [href]="currentRun.html_url" target="_blank" rel="noopener">run #{{ currentRun.id }} ↗</a>
       }
+      @if (agentPr(); as pr) {
+        <a [href]="pr.html_url" target="_blank" rel="noopener">agent PR #{{ pr.number }} ↗</a>
+      }
     </div>
 
     @if (error(); as message) {

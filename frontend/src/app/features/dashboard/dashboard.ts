@@ -29,6 +29,7 @@ export class Dashboard {
   readonly jiraIdInput = signal('');
   readonly phase = this.zeroBug.phase;
   readonly run = this.zeroBug.run;
+  readonly agentPr = this.zeroBug.agentPr;
   readonly plan = this.zeroBug.plan;
   readonly error = this.zeroBug.error;
   readonly log = this.zeroBug.log;

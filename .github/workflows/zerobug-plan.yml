@@ -11,7 +11,7 @@ on:
         required: true
         type: string
       mode:
-        description: "plan = analyse only, publish = also write the plan into the Jira description"
+        description: "plan = analyse, publish = write the plan into the Jira description"
         required: true
         default: plan
         type: choice
@@ -19,6 +19,8 @@ on:
 
 permissions:
   contents: write
+  issues: write
+  pull-requests: read
 
 concurrency:
   group: zerobug-${{ inputs.jira_id }}
@@ -26,6 +28,9 @@ concurrency:
 
 env:
   PLANS_BRANCH: zerobug-plans
+  # agent   = Copilot coding agent session on GitHub's infrastructure (default)
+  # copilot = headless Copilot CLI session in this runner
+  ZEROBUG_ENGINE: ${{ vars.ZEROBUG_ENGINE || 'agent' }}
 
 jobs:
   analyse:
@@ -59,29 +64,37 @@ jobs:
         working-directory: .github/zerobug
         run: npm install --omit=dev --no-audit --no-fund
 
-      - name: Require a Copilot token
+      - name: Check the engine credential
         env:
           COPILOT_TOKEN: ${{ secrets.COPILOT_TOKEN }}
+          AGENT_TOKEN: ${{ secrets.AGENT_TOKEN }}
         run: |
-          if [ -z "$COPILOT_TOKEN" ]; then
-            echo "::error::COPILOT_TOKEN is not set. The analysis runs as a GitHub Copilot CLI session and needs a token from an account with a Copilot seat."
+          if [ "$ZEROBUG_ENGINE" = "copilot" ] && [ -z "$COPILOT_TOKEN" ]; then
+            echo "::error::ZEROBUG_ENGINE=copilot needs COPILOT_TOKEN (fine-grained PAT with the Copilot Requests permission)."
+            exit 1
+          fi
+          if [ "$ZEROBUG_ENGINE" = "agent" ] && [ -z "$AGENT_TOKEN" ] && [ -z "$COPILOT_TOKEN" ]; then
+            echo "::error::ZEROBUG_ENGINE=agent needs AGENT_TOKEN (a PAT that can create issues and assign the Copilot coding agent)."
             exit 1
           fi
 
       - name: Install GitHub Copilot CLI
+        if: env.ZEROBUG_ENGINE == 'copilot'
         run: npm install -g @github/copilot
 
-      - name: Show the CLI version
-        run: copilot --version
-
-      - name: Fetch the stored plan (publish mode)
+      - name: Look for a plan the agent already produced (publish mode)
         if: inputs.mode == 'publish'
         run: |
-          git fetch origin "$PLANS_BRANCH" --depth=1 || echo "no plans branch yet"
-          git show "origin/$PLANS_BRANCH:plans/$JIRA_ID.json" > "$RUNNER_TEMP/existing-plan.json" \
-            || echo "no stored plan for $JIRA_ID — a fresh one will be generated"
+          for REF in "origin/$PLANS_BRANCH" origin/main; do
+            if git fetch origin "${REF#origin/}" --depth=1 2>/dev/null &&
+               git show "$REF:plans/$JIRA_ID.json" > "$RUNNER_TEMP/existing-plan.json" 2>/dev/null; then
+              echo "Found plans/$JIRA_ID.json on $REF"
+              exit 0
+            fi
+          done
+          echo "No stored plan found yet for $JIRA_ID"
 
-      - name: Read Jira, run the analysis session, build the plan
+      - name: Read Jira and run the analysis
         working-directory: .github/zerobug
         env:
           JIRA_ID: ${{ env.JIRA_ID }}
@@ -91,22 +104,29 @@ jobs:
           # Jira MCP server (optional — empty means the REST path)
           JIRA_MCP_COMMAND: ${{ vars.JIRA_MCP_COMMAND }}
           JIRA_MCP_ARGS: ${{ vars.JIRA_MCP_ARGS }}
-          # Jira REST fallback / credentials the MCP server itself reads
+          # Jira REST / credentials the MCP server itself reads
           JIRA_BASE_URL: ${{ vars.JIRA_BASE_URL }}
           JIRA_URL: ${{ vars.JIRA_BASE_URL }}
           JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
           JIRA_USERNAME: ${{ secrets.JIRA_EMAIL }}
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-          # Copilot CLI auth. It checks COPILOT_GITHUB_TOKEN first, then GH_TOKEN/GITHUB_TOKEN.
-          # The token must be a fine-grained PAT carrying the "Copilot Requests" permission.
+          # Coding agent: needs a real user PAT, the built-in token cannot assign the agent
+          AGENT_TOKEN: ${{ secrets.AGENT_TOKEN || secrets.COPILOT_TOKEN }}
+          # Copilot CLI reads COPILOT_GITHUB_TOKEN first, then GH_TOKEN / GITHUB_TOKEN
           COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_TOKEN }}
           GH_TOKEN: ${{ secrets.COPILOT_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.COPILOT_TOKEN }}
           COPILOT_TIMEOUT_MS: '900000'
         run: node run.mjs
 
+      # The agent engine produces no plan in this job — its session commits one later.
       - name: Commit the plan to the plans branch
         run: |
+          if [ ! -f "$RUNNER_TEMP/plan.json" ]; then
+            echo "No plan file in this run — nothing to commit."
+            exit 0
+          fi
+
           git config user.name "zerobug[bot]"
           git config user.email "zerobug@users.noreply.github.com"
 
@@ -131,7 +151,7 @@ jobs:
         if: always()
         run: |
           echo "## ZeroBug — $JIRA_ID" >> "$GITHUB_STEP_SUMMARY"
-          echo "Mode: ${{ inputs.mode }} · Engine: GitHub Copilot CLI session" >> "$GITHUB_STEP_SUMMARY"
+          echo "Mode: ${{ inputs.mode }} · Engine: $ZEROBUG_ENGINE" >> "$GITHUB_STEP_SUMMARY"
           if [ -f "$RUNNER_TEMP/plan.json" ]; then
             echo '```json' >> "$GITHUB_STEP_SUMMARY"
             head -c 4000 "$RUNNER_TEMP/plan.json" >> "$GITHUB_STEP_SUMMARY"

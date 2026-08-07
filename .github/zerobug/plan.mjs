@@ -199,4 +199,4 @@ export function mergeIntoDescription(existingDescription, plan) {
   return `${kept}\n\n${planToMarkdown(plan)}\n`.trimStart();
 }
 
-export { extractJson, buildPrompt, PLAN_HEADING };
+export { extractJson, buildPrompt, normalise, PLAN_HEADING, SCHEMA };

@@ -2,7 +2,7 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { FixPlan } from '../models/plan.model';
-import { WorkflowRun, WorkflowRunList } from '../models/run.model';
+import { PullRequest, WorkflowRun, WorkflowRunList } from '../models/run.model';
 import { SettingsService } from './settings.service';
 
 const API = 'https://api.github.com';
@@ -43,12 +43,21 @@ export class GithubApiService {
     });
   }
 
-  /** Reads `plans/<JIRA-ID>.json` from the plans branch as raw text. */
-  getPlan(jiraId: string): Observable<FixPlan> {
+  /** Open pull requests — the coding agent delivers its plan as one. */
+  listPullRequests(): Observable<PullRequest[]> {
+    const { owner, repo } = this.settingsService.settings();
+    return this.http.get<PullRequest[]>(
+      `${API}/repos/${owner}/${repo}/pulls?state=open&per_page=50&sort=created&direction=desc`,
+      { headers: this.headers() },
+    );
+  }
+
+  /** Reads `plans/<JIRA-ID>.json` from a branch as raw text. Defaults to the plans branch. */
+  getPlan(jiraId: string, ref?: string): Observable<FixPlan> {
     const { owner, repo, plansBranch } = this.settingsService.settings();
     const url =
       `${API}/repos/${owner}/${repo}/contents/plans/${jiraId}.json` +
-      `?ref=${encodeURIComponent(plansBranch)}&cacheBust=${Date.now()}`;
+      `?ref=${encodeURIComponent(ref ?? plansBranch)}&cacheBust=${Date.now()}`;
     return this.http
       .get(url, { headers: this.headers('application/vnd.github.raw+json'), responseType: 'text' })
       .pipe(map((body) => JSON.parse(body) as FixPlan));

@@ -12,6 +12,15 @@ export interface WorkflowRunList {
   workflow_runs: WorkflowRun[];
 }
 
+/** Pull request opened by the Copilot coding agent, carrying the plan file. */
+export interface PullRequest {
+  number: number;
+  title: string;
+  body: string | null;
+  html_url: string;
+  head: { ref: string };
+}
+
 export type JobPhase =
   | 'idle'
   | 'dispatching'

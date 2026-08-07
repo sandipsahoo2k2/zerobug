@@ -47,7 +47,24 @@ The Actions runner is the "backend", and it is free and already authorised again
 - Optional: a GitHub Copilot seat, if you want the Copilot CLI session rather than the
   GitHub Models fallback.
 
-### 2. Clone and run the dashboard locally
+### 2. Create the Jira site, project, ticket and token
+
+**a. Site** — skip if you already have one. <https://www.atlassian.com/software/jira/free> → sign
+up. You land on `https://<yourname>.atlassian.net`. That whole URL is `JIRA_BASE_URL`.
+
+**b. Project** — *Projects → Create project → Kanban → team-managed*. Name it whatever; set the
+**key** to something like `ZB`. The key becomes the ticket prefix, and ZeroBug validates keys
+against `^[A-Z][A-Z0-9]+-[0-9]+$`, so use two or more letters.
+
+**c. Ticket** — *Create → Issue type: Bug*. To try it against the defect bundled in this repo,
+use the summary and description in [Try it on the bundled defect](#try-it-on-the-bundled-defect).
+Saving gives you a key such as `ZB-1` — that is what you type into the dashboard.
+
+**d. API token** — <https://id.atlassian.com/manage-profile/security/api-tokens> → *Create API
+token* → label it → copy it once. The token authenticates as you, so your account needs
+**Edit Issues** on that project for the publish step to write the description back.
+
+### 3. Clone and run the dashboard locally
 
 ```bash
 cd frontend && npm ci && npm start
@@ -55,13 +72,14 @@ cd frontend && npm ci && npm start
 
 Open <http://localhost:4200>.
 
-### 3. Configure the repository
+### 4. Configure the repository
 
 **Settings → Secrets and variables → Actions → Variables**
 
 | Variable | Example | Meaning |
 | --- | --- | --- |
 | `JIRA_BASE_URL` | `https://acme.atlassian.net` | Jira site, used by the MCP server and the REST fallback |
+| `ZEROBUG_ENGINE` | `agent` | `agent` (default) = Copilot coding agent session; `copilot` = headless Copilot CLI in the runner |
 | `JIRA_MCP_COMMAND` | *(leave empty)* | Optional. Command that launches a Jira MCP server over stdio |
 | `JIRA_MCP_ARGS` | *(leave empty)* | Optional. Comma-separated args for that command |
 
@@ -84,19 +102,27 @@ and the workflow then needs a `astral-sh/setup-uv@v5` step before the analysis s
 | --- | --- |
 | `JIRA_EMAIL` | Atlassian account email |
 | `JIRA_API_TOKEN` | Atlassian API token |
-| `COPILOT_TOKEN` | **Required.** Fine-grained PAT with the **Copilot Requests** account permission, from an account with a Copilot seat. The analysis runs as a headless Copilot CLI session; the workflow fails fast if this is missing. |
+| `AGENT_TOKEN` | Needed by `ZEROBUG_ENGINE=agent`. A PAT that can create issues in this repo and assign `copilot-swe-agent` to them. The built-in `GITHUB_TOKEN` cannot start an agent session. |
+| `COPILOT_TOKEN` | Needed by `ZEROBUG_ENGINE=copilot`. Fine-grained PAT with the **Copilot Requests** account permission, from an account with a Copilot seat. |
 
-There is no fallback engine. GitHub Models used to serve as one; it is being retired and now
-answers `410 github_models_retirement_brownout`, and a plan produced without real access to the
-code is not worth writing into a ticket anyway.
+Both engines need Copilot entitlement — one as a token you hold, the other as a seat GitHub
+checks server-side. There is no fallback engine: GitHub Models used to be one, it is being
+retired and now answers `410 github_models_retirement_brownout`, and a plan produced without
+real access to the code is not worth writing into a ticket.
 
-### 4. Enable GitHub Pages
+### 5. Enable GitHub Pages
 
-**Settings → Pages → Source: GitHub Actions.** Push to `main`; `deploy-pages.yml` builds the
-Angular app with `--base-href /<repo>/` and publishes it. The dashboard lands at
-`https://<owner>.github.io/<repo>/`.
+Two options; the workflow in this repo uses the second.
 
-### 5. Create the dashboard token
+- **Source: GitHub Actions** — the Pages artifact API. Cleanest, but the setting must be
+  switched from the default.
+- **Source: Deploy from a branch → `gh-pages` / `(root)`** — what `deploy-pages.yml` publishes
+  to. Build output is force-pushed to `gh-pages` on every push to `main` that touches
+  `frontend/`.
+
+Either way the dashboard lands at `https://<owner>.github.io/<repo>/`.
+
+### 6. Create the dashboard token
 
 The browser needs permission to start a workflow run. Create a **fine-grained PAT**, scoped to
 this repository only:
@@ -108,13 +134,17 @@ Paste it into the dashboard's **Settings** panel. It is stored in that browser's
 and sent only to `api.github.com`. Jira credentials never reach the browser.
 
 > If you would rather not keep a GitHub token in a browser at all, run the dashboard only on
-> `localhost` and skip step 4.
+> `localhost` and skip step 5.
 
-### 6. Use it
+### 7. Use it
 
 1. Enter a Jira ID, e.g. `ZB-123`, press **Analyse defect**.
 2. The dashboard dispatches `zerobug-plan.yml` in `plan` mode and follows the run.
-3. When the run finishes, the plan is read from the `zerobug-plans` branch and rendered:
+   With `ZEROBUG_ENGINE=agent` the run finishes in seconds — it only opens a tracking issue and
+   assigns the Copilot coding agent. The session then works on GitHub's side and opens a pull
+   request adding `plans/<JIRA-ID>.json`; the dashboard watches for that PR and links to it.
+3. When the plan appears — on the `zerobug-plans` branch, on `main`, or on the agent's PR
+   branch — it is rendered:
    root cause hypothesis, suspect files, related commits, numbered fix steps with per-step
    validation, tests, rollback.
 4. Press **Publish plan to Jira**. That re-dispatches in `publish` mode, which appends the plan to

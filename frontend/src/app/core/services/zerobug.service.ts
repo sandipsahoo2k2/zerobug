@@ -1,13 +1,18 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { FixPlan } from '../models/plan.model';
-import { JobPhase, WorkflowRun } from '../models/run.model';
+import { JobPhase, PullRequest, WorkflowRun } from '../models/run.model';
 import { GithubApiService } from './github-api.service';
+import { SettingsService } from './settings.service';
 
 const POLL_INTERVAL_MS = 4_000;
 const RUN_TIMEOUT_MS = 15 * 60_000;
-/** The plans branch needs a moment to show the new commit after the run turns green. */
-const PLAN_FETCH_ATTEMPTS = 8;
+/**
+ * With the coding agent the workflow run finishes in seconds and the session keeps working
+ * afterwards, so the plan hunt has to outlive the run by a long way.
+ */
+const PLAN_HUNT_TIMEOUT_MS = 25 * 60_000;
+const PLAN_HUNT_INTERVAL_MS = 10_000;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -18,6 +23,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 @Injectable({ providedIn: 'root' })
 export class ZeroBugService {
   private readonly github = inject(GithubApiService);
+  private readonly settingsService = inject(SettingsService);
 
   private readonly phaseState = signal<JobPhase>('idle');
   private readonly runState = signal<WorkflowRun | null>(null);
@@ -25,6 +31,7 @@ export class ZeroBugService {
   private readonly errorState = signal<string | null>(null);
   private readonly logState = signal<string[]>([]);
   private readonly jiraIdState = signal('');
+  private readonly agentPrState = signal<PullRequest | null>(null);
 
   readonly phase = this.phaseState.asReadonly();
   readonly run = this.runState.asReadonly();
@@ -32,6 +39,7 @@ export class ZeroBugService {
   readonly error = this.errorState.asReadonly();
   readonly log = this.logState.asReadonly();
   readonly jiraId = this.jiraIdState.asReadonly();
+  readonly agentPr = this.agentPrState.asReadonly();
 
   readonly busy = computed(() => !['idle', 'done', 'error'].includes(this.phaseState()));
   readonly canPublish = computed(() => this.phaseState() === 'done' && this.planState() !== null);
@@ -96,10 +104,13 @@ export class ZeroBugService {
     }
 
     this.phaseState.set('fetching-plan');
-    this.append('Run succeeded. Fetching the plan…');
-    const plan = await this.fetchPlanWithRetry(jiraId);
+    this.append('Run succeeded. Waiting for the plan…');
+    const plan = await this.huntForPlan(jiraId);
     if (!plan) {
-      this.fail('Run succeeded but plans/' + jiraId + '.json was not found on the plans branch.');
+      this.fail(
+        `Gave up waiting for plans/${jiraId}.json. Check the Copilot session in the repository's ` +
+          'Agents tab — if it opened a pull request, the plan file may be named differently.',
+      );
       return;
     }
 
@@ -141,21 +152,63 @@ export class ZeroBugService {
     return null;
   }
 
-  private async fetchPlanWithRetry(jiraId: string): Promise<FixPlan | null> {
-    for (let attempt = 0; attempt < PLAN_FETCH_ATTEMPTS; attempt++) {
-      try {
-        return await firstValueFrom(this.github.getPlan(jiraId));
-      } catch {
-        await sleep(3_000);
+  /**
+   * The plan can arrive by two routes: committed to the plans branch by the CLI engine, or
+   * added by the coding agent on the branch behind its pull request. Watch both.
+   */
+  private async huntForPlan(jiraId: string): Promise<FixPlan | null> {
+    const deadline = Date.now() + PLAN_HUNT_TIMEOUT_MS;
+    let announcedPr = false;
+
+    while (Date.now() < deadline) {
+      const { plansBranch, ref } = this.settingsService.settings();
+
+      for (const branch of [plansBranch, ref]) {
+        const plan = await this.tryPlan(jiraId, branch);
+        if (plan) return plan;
       }
+
+      const pr = await this.findAgentPullRequest(jiraId);
+      if (pr) {
+        this.agentPrState.set(pr);
+        if (!announcedPr) {
+          announcedPr = true;
+          this.append(`Agent opened pull request #${pr.number}. Reading the plan from it…`);
+        }
+        const plan = await this.tryPlan(jiraId, pr.head.ref);
+        if (plan) return plan;
+      }
+
+      await sleep(PLAN_HUNT_INTERVAL_MS);
     }
     return null;
+  }
+
+  private async tryPlan(jiraId: string, ref: string): Promise<FixPlan | null> {
+    try {
+      return await firstValueFrom(this.github.getPlan(jiraId, ref));
+    } catch {
+      return null;
+    }
+  }
+
+  private async findAgentPullRequest(jiraId: string): Promise<PullRequest | null> {
+    try {
+      const pulls = await firstValueFrom(this.github.listPullRequests());
+      return (
+        pulls.find((pull) => `${pull.title} ${pull.body ?? ''}`.toUpperCase().includes(jiraId)) ??
+        null
+      );
+    } catch {
+      return null;
+    }
   }
 
   private reset(jiraId: string): void {
     this.jiraIdState.set(jiraId);
     this.planState.set(null);
     this.runState.set(null);
+    this.agentPrState.set(null);
     this.errorState.set(null);
     this.logState.set([]);
   }
