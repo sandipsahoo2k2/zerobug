@@ -9,6 +9,8 @@ import { SCHEMA, generatePlan, mergeIntoDescription } from './plan.mjs';
  * Entry point for the ZeroBug workflow.
  *
  * Engines (ZEROBUG_ENGINE):
+ *   claude  -> Anthropic API call from this runner. Needs no Copilot entitlement; the repo
+ *              context carries the suspect source inline since the model cannot browse.
  *   agent   -> opens a GitHub issue and assigns it to the Copilot coding agent. The session
  *              runs on GitHub's side and opens a PR containing plans/<JIRA-ID>.json, so this
  *              job finishes in seconds and the plan lands minutes later.
@@ -101,7 +103,7 @@ async function main() {
     log('Collecting repository context…');
     const repoContext = buildRepoContext(jiraId, issue);
     log(`Context: ${repoContext.length} chars. Starting the analysis session…`);
-    plan = await generatePlan(issue, repoContext);
+    plan = await generatePlan(issue, repoContext, engine);
     log(`Plan ready: ${plan.steps.length} steps, risk ${plan.riskLevel}.`);
   }
 

@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 
 const git = (args, fallback = '') => {
   try {
@@ -63,10 +64,39 @@ function hotspots(limit = 15) {
 
 function grepHits(terms, perTerm = 12) {
   const blocks = [];
+  const files = new Map();
+
   for (const term of terms) {
     const hits = git(['grep', '-n', '-I', '-i', '-e', term, '--', '.', ...EXCLUDED]);
     if (!hits) continue;
-    blocks.push(`### matches for "${term}"\n${hits.split('\n').slice(0, perTerm).join('\n')}`);
+
+    const lines = hits.split('\n');
+    for (const line of lines) {
+      const path = line.split(':')[0];
+      if (path) files.set(path, (files.get(path) ?? 0) + 1);
+    }
+    blocks.push(`### matches for "${term}"\n${lines.slice(0, perTerm).join('\n')}`);
+  }
+
+  const ranked = [...files.entries()].sort((a, b) => b[1] - a[1]).map(([path]) => path);
+  return { text: blocks.join('\n\n'), files: ranked };
+}
+
+/**
+ * Full source of the files the search points at. An engine running inside the
+ * checkout could open these itself; one reached over an API cannot, so the
+ * context carries them inline.
+ */
+function fileSources(paths, limit = 4, maxBytes = 24_000) {
+  const blocks = [];
+  for (const path of paths.slice(0, limit)) {
+    try {
+      const source = readFileSync(path, 'utf8');
+      const clipped = source.length > maxBytes ? `${source.slice(0, maxBytes)}\n… (truncated)` : source;
+      blocks.push(`### ${path}\n\`\`\`\n${clipped}\n\`\`\``);
+    } catch {
+      // Binary, deleted, or unreadable — the grep excerpt above still stands on its own.
+    }
   }
   return blocks.join('\n\n');
 }
@@ -77,6 +107,7 @@ function grepHits(terms, perTerm = 12) {
  */
 export function buildRepoContext(jiraId, issue) {
   const terms = keywords(`${issue.summary} ${issue.description}`);
+  const hits = grepHits(terms);
   return [
     `## Repository\n${git(['config', '--get', 'remote.origin.url'], 'unknown remote')}`,
     `Current branch: ${git(['rev-parse', '--abbrev-ref', 'HEAD'], 'unknown')}`,
@@ -88,7 +119,10 @@ export function buildRepoContext(jiraId, issue) {
     }`,
     `\n## Change hotspots (last 150 commits)\n${hotspots().join('\n')}`,
     `\n## Keyword search\nkeywords: ${terms.join(', ') || '(none extracted)'}\n${
-      grepHits(terms) || '(no matches)'
+      hits.text || '(no matches)'
+    }`,
+    `\n## Source of the files the search points at\n${
+      fileSources(hits.files) || '(nothing to show)'
     }`,
   ].join('\n');
 }

@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import Anthropic from '@anthropic-ai/sdk';
 
 /**
  * Turns a Jira issue + repository context into a step-by-step fix plan.
@@ -105,6 +106,35 @@ function runCopilotCli(prompt) {
   return result.stdout;
 }
 
+/**
+ * Claude reads the context this script gathered rather than browsing the repo itself,
+ * so the prompt carries the suspect source inline (see context.mjs).
+ */
+async function runClaude(prompt) {
+  const client = new Anthropic();
+  const model = env.ZEROBUG_MODEL || 'claude-opus-5';
+
+  // Streamed because thinking is on by default on Opus 5 and counts against max_tokens;
+  // a non-streaming request this size risks an HTTP timeout.
+  const stream = client.messages.stream({
+    model,
+    max_tokens: 32000,
+    system: 'You are a senior engineer triaging a defect. You output a single JSON object and nothing else.',
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  const message = await stream.finalMessage();
+
+  if (message.stop_reason === 'refusal') {
+    throw new Error(`Claude declined the request (${message.stop_details?.category ?? 'unknown'}).`);
+  }
+
+  return message.content
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('\n');
+}
+
 const asArray = (value) => (Array.isArray(value) ? value : []);
 
 function normalise(raw, issue, engine) {
@@ -135,12 +165,19 @@ function normalise(raw, issue, engine) {
 }
 
 /**
- * Runs a headless GitHub Copilot CLI session in the checkout and returns the plan.
- * There is deliberately no fallback engine: a plan that did not come from a session
- * with real access to the code is not worth writing into a Jira ticket.
+ * Produces the plan with whichever engine the workflow selected.
+ * There is no silent fallback chain — the engine is chosen explicitly so a plan
+ * always states which one wrote it.
  */
-export async function generatePlan(issue, repoContext) {
+export async function generatePlan(issue, repoContext, engine = 'copilot') {
   const prompt = buildPrompt(issue, repoContext);
+
+  if (engine === 'claude') {
+    const model = env.ZEROBUG_MODEL || 'claude-opus-5';
+    console.log(`Engine: Anthropic API (${model})`);
+    return normalise(extractJson(await runClaude(prompt)), issue, `anthropic:${model}`);
+  }
+
   console.log('Engine: GitHub Copilot CLI session');
   return normalise(extractJson(runCopilotCli(prompt)), issue, 'copilot-cli');
 }

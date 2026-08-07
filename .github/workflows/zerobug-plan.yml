@@ -28,9 +28,10 @@ concurrency:
 
 env:
   PLANS_BRANCH: zerobug-plans
-  # agent   = Copilot coding agent session on GitHub's infrastructure (default)
+  # claude  = Anthropic API call from this runner (default — needs no Copilot entitlement)
+  # agent   = Copilot coding agent session on GitHub's infrastructure
   # copilot = headless Copilot CLI session in this runner
-  ZEROBUG_ENGINE: ${{ vars.ZEROBUG_ENGINE || 'agent' }}
+  ZEROBUG_ENGINE: ${{ vars.ZEROBUG_ENGINE || 'claude' }}
 
 jobs:
   analyse:
@@ -68,7 +69,12 @@ jobs:
         env:
           COPILOT_TOKEN: ${{ secrets.COPILOT_TOKEN }}
           AGENT_TOKEN: ${{ secrets.AGENT_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
+          if [ "$ZEROBUG_ENGINE" = "claude" ] && [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error::ZEROBUG_ENGINE=claude needs ANTHROPIC_API_KEY (https://platform.claude.com -> API keys)."
+            exit 1
+          fi
           if [ "$ZEROBUG_ENGINE" = "copilot" ] && [ -z "$COPILOT_TOKEN" ]; then
             echo "::error::ZEROBUG_ENGINE=copilot needs COPILOT_TOKEN (fine-grained PAT with the Copilot Requests permission)."
             exit 1
@@ -110,6 +116,9 @@ jobs:
           JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
           JIRA_USERNAME: ${{ secrets.JIRA_EMAIL }}
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          # Anthropic API engine
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ZEROBUG_MODEL: ${{ vars.ZEROBUG_MODEL }}
           # Coding agent: needs a real user PAT, the built-in token cannot assign the agent
           AGENT_TOKEN: ${{ secrets.AGENT_TOKEN || secrets.COPILOT_TOKEN }}
           # Copilot CLI reads COPILOT_GITHUB_TOKEN first, then GH_TOKEN / GITHUB_TOKEN
