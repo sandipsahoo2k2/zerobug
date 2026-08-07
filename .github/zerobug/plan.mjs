@@ -100,9 +100,17 @@ function runCopilotCli(prompt) {
   });
 
   if (result.error) throw new Error(`Copilot CLI failed to start: ${result.error.message}`);
+
   if (result.status !== 0) {
+    // Echo both streams in full — the thrown message is truncated, and when this
+    // failure is the reason for a fallback the detail is what explains it.
+    console.error('--- copilot stdout ---');
+    console.error(result.stdout || '(empty)');
+    console.error('--- copilot stderr ---');
+    console.error(result.stderr || '(empty)');
     throw new Error(`Copilot CLI exited ${result.status}: ${(result.stderr || result.stdout || '').slice(-2000)}`);
   }
+
   return result.stdout;
 }
 

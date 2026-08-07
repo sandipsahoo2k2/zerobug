@@ -121,5 +121,10 @@ async function main() {
 
 main().catch((error) => {
   console.error(`[zerobug] failed: ${error.message}`);
+  // Put the reason on the run page, not only in the raw log.
+  summary('## ZeroBug failed');
+  summary('```');
+  summary(error.message);
+  summary('```');
   process.exit(1);
 });

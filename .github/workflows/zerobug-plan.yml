@@ -97,6 +97,9 @@ jobs:
           AGENT_TOKEN: ${{ secrets.AGENT_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
+          # Everything below lands in the run summary as well as the log, so the
+          # verdict is on the run page without opening the raw log.
+          exec > >(tee -a "$RUNNER_TEMP/diagnostics.txt") 2>&1
           check_github() {
             local name="$1" token="$2"
             if [ -z "$token" ]; then
@@ -147,6 +150,16 @@ jobs:
           echo "Reading: /user 401 = the token is wrong. /user 200 + Copilot auth failure = the"
           echo "token is fine and the account simply has no Copilot entitlement."
 
+      - name: Publish the credential diagnostics
+        if: always()
+        run: |
+          {
+            echo "## Credential diagnostics"
+            echo '```'
+            cat "$RUNNER_TEMP/diagnostics.txt" 2>/dev/null || echo "(diagnostics did not run)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       # Proves how the token is passed, independently of whether it is entitled.
       - name: Probe the Copilot CLI
         if: env.ZEROBUG_ENGINE == 'copilot'
@@ -162,8 +175,20 @@ jobs:
             [ -n "$(eval echo \"\$$var\")" ] && echo "$var: passed to the CLI" || echo "$var: empty"
           done
           echo "--- one-shot session, exit code and message below ---"
-          copilot --allow-all-tools -p 'Reply with exactly: OK' 2>&1 | tail -20
-          echo "exit code: ${PIPESTATUS[0]}"
+          set +e
+          output=$(copilot --allow-all-tools -p 'Reply with exactly: OK' 2>&1)
+          code=$?
+          set -e
+          echo "$output" | tail -30
+          echo "exit code: $code"
+
+          {
+            echo "## Copilot CLI probe"
+            echo "exit code: \`$code\`"
+            echo '```'
+            echo "$output" | tail -30
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Install GitHub Copilot CLI
         if: env.ZEROBUG_ENGINE == 'copilot'
