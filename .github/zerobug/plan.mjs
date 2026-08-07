@@ -164,22 +164,37 @@ function normalise(raw, issue, engine) {
   };
 }
 
+const claudeLabel = () => `anthropic:${env.ZEROBUG_MODEL || 'claude-opus-5'}`;
+
 /**
- * Produces the plan with whichever engine the workflow selected.
- * There is no silent fallback chain — the engine is chosen explicitly so a plan
- * always states which one wrote it.
+ * Produces the plan. `copilot` is preferred because that session runs inside the
+ * checkout and can open files itself; if it cannot run — no Copilot entitlement,
+ * expired token, CLI failure — the Anthropic API takes over.
+ *
+ * The fallback is never silent: whichever engine produced the plan is recorded in
+ * its `engine` field, and a fallback says so.
  */
 export async function generatePlan(issue, repoContext, engine = 'copilot') {
   const prompt = buildPrompt(issue, repoContext);
 
   if (engine === 'claude') {
-    const model = env.ZEROBUG_MODEL || 'claude-opus-5';
-    console.log(`Engine: Anthropic API (${model})`);
-    return normalise(extractJson(await runClaude(prompt)), issue, `anthropic:${model}`);
+    console.log(`Engine: Anthropic API (${claudeLabel()})`);
+    return normalise(extractJson(await runClaude(prompt)), issue, claudeLabel());
   }
 
-  console.log('Engine: GitHub Copilot CLI session');
-  return normalise(extractJson(runCopilotCli(prompt)), issue, 'copilot-cli');
+  try {
+    console.log('Engine: GitHub Copilot CLI session');
+    return normalise(extractJson(runCopilotCli(prompt)), issue, 'copilot-cli');
+  } catch (error) {
+    if (!env.ANTHROPIC_API_KEY) {
+      throw new Error(
+        `Copilot CLI failed and no ANTHROPIC_API_KEY is set to fall back to. ${error.message}`,
+      );
+    }
+    console.warn(`::warning::Copilot CLI unusable, falling back to the Anthropic API. ${error.message}`);
+    const plan = normalise(extractJson(await runClaude(prompt)), issue, `${claudeLabel()} (fallback from copilot-cli)`);
+    return plan;
+  }
 }
 
 /** Renders the plan as the Markdown written back into the Jira description. */

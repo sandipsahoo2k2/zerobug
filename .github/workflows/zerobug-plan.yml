@@ -28,10 +28,11 @@ concurrency:
 
 env:
   PLANS_BRANCH: zerobug-plans
-  # claude  = Anthropic API call from this runner (default — needs no Copilot entitlement)
+  # copilot = headless Copilot CLI session in this runner (default), falling back to the
+  #           Anthropic API when Copilot cannot run
+  # claude  = Anthropic API only, no Copilot attempt
   # agent   = Copilot coding agent session on GitHub's infrastructure
-  # copilot = headless Copilot CLI session in this runner
-  ZEROBUG_ENGINE: ${{ vars.ZEROBUG_ENGINE || 'claude' }}
+  ZEROBUG_ENGINE: ${{ vars.ZEROBUG_ENGINE || 'copilot' }}
 
 jobs:
   analyse:
@@ -75,9 +76,13 @@ jobs:
             echo "::error::ZEROBUG_ENGINE=claude needs ANTHROPIC_API_KEY (https://platform.claude.com -> API keys)."
             exit 1
           fi
-          if [ "$ZEROBUG_ENGINE" = "copilot" ] && [ -z "$COPILOT_TOKEN" ]; then
-            echo "::error::ZEROBUG_ENGINE=copilot needs COPILOT_TOKEN (fine-grained PAT with the Copilot Requests permission)."
+          # The copilot engine falls back to the Anthropic API, so either credential is enough.
+          if [ "$ZEROBUG_ENGINE" = "copilot" ] && [ -z "$COPILOT_TOKEN" ] && [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error::ZEROBUG_ENGINE=copilot needs COPILOT_TOKEN (fine-grained PAT with the Copilot Requests permission), or ANTHROPIC_API_KEY to fall back to."
             exit 1
+          fi
+          if [ "$ZEROBUG_ENGINE" = "copilot" ] && [ -z "$COPILOT_TOKEN" ]; then
+            echo "::notice::COPILOT_TOKEN is not set — the Copilot attempt will fail and the run will fall back to the Anthropic API."
           fi
           if [ "$ZEROBUG_ENGINE" = "agent" ] && [ -z "$AGENT_TOKEN" ] && [ -z "$COPILOT_TOKEN" ]; then
             echo "::error::ZEROBUG_ENGINE=agent needs AGENT_TOKEN (a PAT that can create issues and assign the Copilot coding agent)."

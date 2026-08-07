@@ -79,7 +79,7 @@ Open <http://localhost:4200>.
 | Variable | Example | Meaning |
 | --- | --- | --- |
 | `JIRA_BASE_URL` | `https://acme.atlassian.net` | Jira site, used by the MCP server and the REST fallback |
-| `ZEROBUG_ENGINE` | `claude` | `claude` (default) = Anthropic API from the runner; `agent` = Copilot coding agent session; `copilot` = headless Copilot CLI in the runner |
+| `ZEROBUG_ENGINE` | `copilot` | `copilot` (default) = headless Copilot CLI in the runner, falling back to the Anthropic API if it cannot run; `claude` = Anthropic API only; `agent` = Copilot coding agent session |
 | `ZEROBUG_MODEL` | `claude-opus-5` | Model for the `claude` engine |
 | `JIRA_MCP_COMMAND` | *(leave empty)* | Optional. Command that launches a Jira MCP server over stdio |
 | `JIRA_MCP_ARGS` | *(leave empty)* | Optional. Comma-separated args for that command |
@@ -103,21 +103,27 @@ and the workflow then needs a `astral-sh/setup-uv@v5` step before the analysis s
 | --- | --- |
 | `JIRA_EMAIL` | Atlassian account email |
 | `JIRA_API_TOKEN` | Atlassian API token |
-| `ANTHROPIC_API_KEY` | Needed by `ZEROBUG_ENGINE=claude` (the default). From <https://platform.claude.com> → API keys. |
+| `COPILOT_TOKEN` | Used by the default `copilot` engine. Fine-grained PAT with the **Copilot Requests** account permission, from an account with a Copilot seat. |
+| `ANTHROPIC_API_KEY` | The fallback when Copilot cannot run, and the only credential `ZEROBUG_ENGINE=claude` needs. From <https://platform.claude.com> → API keys. |
 | `AGENT_TOKEN` | Needed by `ZEROBUG_ENGINE=agent`. A PAT that can create issues in this repo and assign `copilot-swe-agent` to them. The built-in `GITHUB_TOKEN` cannot start an agent session. |
-| `COPILOT_TOKEN` | Needed by `ZEROBUG_ENGINE=copilot`. Fine-grained PAT with the **Copilot Requests** account permission, from an account with a Copilot seat. |
+
+**Copilot first, Anthropic as the fallback.** The Copilot session runs inside the checkout and
+opens files itself, which is the better position to analyse from — so it is tried first. If it
+cannot run (no Copilot seat, expired token, CLI failure) the run falls through to the Anthropic
+API rather than failing.
 
 **Both GitHub engines require Copilot entitlement** — the CLI as a token you hold, the coding
-agent as a seat GitHub checks server-side. Without a Copilot plan neither can authenticate,
-which is why `claude` is the default: it needs only an API key.
+agent as a seat GitHub checks server-side. Set only `ANTHROPIC_API_KEY` and every run still
+works; it just spends ~30s on a failing Copilot attempt first. Set `ZEROBUG_ENGINE=claude` to
+skip that attempt entirely.
 
-The engines differ in how they see the code. The Copilot engines run inside the checkout and
-open files themselves. The `claude` engine calls an API, so `context.mjs` inlines the source of
-the files the keyword search points at — the model reads real code, not just file names.
+The fallback is never silent. The Anthropic engine cannot browse the checkout, so `context.mjs`
+inlines the source of the files the keyword search points at — the model reads real code, not
+just file names — and the plan's `engine` field records what produced it
+(`copilot-cli`, or `anthropic:claude-opus-5 (fallback from copilot-cli)`).
 
-There is no automatic fallback between engines: whichever one the workflow selects is the one
-recorded in the plan's `engine` field. (GitHub Models used to serve as a fallback; it is being
-retired and now answers `410 github_models_retirement_brownout`.)
+(GitHub Models used to be the fallback; it is being retired and now answers
+`410 github_models_retirement_brownout`.)
 
 ### 5. Enable GitHub Pages
 
