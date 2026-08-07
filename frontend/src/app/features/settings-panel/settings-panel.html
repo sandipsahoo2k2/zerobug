@@ -1,10 +1,15 @@
-<details class="settings" [open]="!isConfigured()">
-  <summary>
-    Settings
-    <span class="state" [class.ok]="isConfigured()">
-      {{ isConfigured() ? 'configured' : 'token required' }}
-    </span>
-  </summary>
+<div class="backdrop" (click)="close.emit()"></div>
+
+<section class="settings" role="dialog" aria-modal="true" aria-label="Settings">
+  <header>
+    <h2>
+      Settings
+      <span class="state" [class.ok]="isConfigured()">
+        {{ isConfigured() ? 'configured' : 'token required' }}
+      </span>
+    </h2>
+    <button type="button" class="icon" (click)="close.emit()" aria-label="Close settings">✕</button>
+  </header>
 
   <div class="grid">
     <label>
@@ -42,8 +47,12 @@
   <p class="hint">
     Use a <strong>fine-grained PAT scoped to this repository only</strong>, with
     <code>Actions: read and write</code> and <code>Contents: read</code>. It is stored in this
-    browser's localStorage and sent only to <code>api.github.com</code>. Jira credentials never
-    touch the browser — they live in the repository's Actions secrets.
+    browser's localStorage and sent only to <code>api.github.com</code>. Jira and Anthropic
+    credentials never touch the browser — they live in the repository's Actions secrets.
     <button type="button" class="link" (click)="clearToken()">Clear token</button>
   </p>
-</details>
+
+  <footer>
+    <button type="button" class="primary" (click)="close.emit()">Done</button>
+  </footer>
+</section>

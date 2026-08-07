@@ -6,7 +6,26 @@
       <p>Jira ID in, step-by-step fix plan out.</p>
     </div>
   </div>
+
+  <button
+    type="button"
+    class="settings-button"
+    (click)="openSettings()"
+    [attr.aria-expanded]="settingsOpen()"
+    aria-label="Settings"
+    title="Settings"
+  >
+    <span class="gear" aria-hidden="true">⚙</span>
+    Settings
+    @if (!isConfigured()) {
+      <span class="dot" aria-hidden="true"></span>
+    }
+  </button>
 </header>
+
+@if (settingsOpen()) {
+  <app-settings-panel (close)="closeSettings()" />
+}
 
 <main>
   <router-outlet />

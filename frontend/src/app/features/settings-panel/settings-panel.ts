@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, output } from '@angular/core';
 import { SettingsService } from '../../core/services/settings.service';
 
 /** Repo/workflow coordinates plus the GitHub token used to dispatch runs. */
@@ -10,6 +10,8 @@ import { SettingsService } from '../../core/services/settings.service';
 })
 export class SettingsPanel {
   private readonly settingsService = inject(SettingsService);
+
+  readonly close = output<void>();
 
   readonly settings = this.settingsService.settings;
   readonly isConfigured = this.settingsService.isConfigured;

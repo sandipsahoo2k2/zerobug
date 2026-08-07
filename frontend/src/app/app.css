@@ -6,7 +6,42 @@
 }
 
 .topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
   margin-bottom: 1.75rem;
+}
+
+.settings-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.settings-button:hover {
+  border-color: var(--accent);
+}
+
+.gear {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+/* Unconfigured dashboards can't dispatch — flag it on the button itself. */
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warn);
 }
 
 .brand {

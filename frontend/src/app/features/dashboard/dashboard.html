@@ -1,9 +1,8 @@
 <section class="starter">
   <h2>Start work on a defect</h2>
   <p class="lead">
-    Enter a Jira ID. GitHub Actions checks out the repo, reads the issue through the Jira MCP
-    server, runs a GitHub Copilot session over the code and past commits, and writes back a
-    step-by-step fix plan.
+    Enter a Jira ID. GitHub Actions checks out the repo, reads the issue from Jira, analyses the
+    code and its history, and writes back a step-by-step fix plan.
   </p>
 
   <form class="run-form" (submit)="$event.preventDefault(); start()">
@@ -26,8 +25,6 @@
     <p class="warn">Add your repo details and a GitHub token in Settings to enable dispatch.</p>
   }
 </section>
-
-<app-settings-panel />
 
 @if (phase() !== 'idle') {
   <section class="status">

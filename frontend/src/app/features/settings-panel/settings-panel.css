@@ -1,34 +1,72 @@
-.settings {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 1rem 1.25rem;
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 45%);
+  z-index: 10;
 }
 
-summary {
-  cursor: pointer;
-  font-weight: 600;
+.settings {
+  position: fixed;
+  z-index: 11;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(720px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1.25rem 1.5rem 1.5rem;
+  box-shadow: 0 24px 60px rgb(0 0 0 / 35%);
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+h2 {
+  margin: 0;
+  font-size: 1.05rem;
 }
 
 .state {
   margin-left: 0.5rem;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 500;
-  padding: 0.1rem 0.5rem;
+  padding: 0.15rem 0.5rem;
   border-radius: 999px;
   background: color-mix(in srgb, var(--warn) 20%, transparent);
   color: var(--warn);
+  vertical-align: middle;
 }
 .state.ok {
   background: color-mix(in srgb, var(--ok) 20%, transparent);
   color: var(--ok);
 }
 
+.icon {
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0.25rem 0.4rem;
+  border-radius: 6px;
+}
+.icon:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 0.75rem;
-  margin-top: 1rem;
+  margin-top: 1.25rem;
 }
 
 .wide {
@@ -39,7 +77,7 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--muted);
@@ -62,10 +100,10 @@ input:focus {
 }
 
 .hint {
-  margin: 1rem 0 0;
-  font-size: 0.8rem;
+  margin: 1.25rem 0 0;
+  font-size: 0.78rem;
   color: var(--muted);
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 .link {
@@ -82,4 +120,21 @@ code {
   background: var(--code-bg);
   padding: 0.05rem 0.3rem;
   border-radius: 4px;
+}
+
+footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1.25rem;
+}
+
+.primary {
+  padding: 0.55rem 1.2rem;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #06121f;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
 }

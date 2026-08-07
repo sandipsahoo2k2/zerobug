@@ -2,7 +2,6 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { SettingsService } from '../../core/services/settings.service';
 import { ZeroBugService } from '../../core/services/zerobug.service';
 import { PlanView } from '../plan-view/plan-view';
-import { SettingsPanel } from '../settings-panel/settings-panel';
 
 const PHASE_LABEL: Record<string, string> = {
   idle: 'Idle',
@@ -18,7 +17,7 @@ const PHASE_LABEL: Record<string, string> = {
 @Component({
   selector: 'app-dashboard',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PlanView, SettingsPanel],
+  imports: [PlanView],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.css',
 })
