@@ -89,6 +89,51 @@ jobs:
             exit 1
           fi
 
+      # Answers "is my token actually valid?" without ever printing a secret:
+      # GitHub masks them in logs, and only status codes and logins are echoed.
+      - name: Diagnose credentials
+        env:
+          COPILOT_TOKEN: ${{ secrets.COPILOT_TOKEN }}
+          AGENT_TOKEN: ${{ secrets.AGENT_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          check_github() {
+            local name="$1" token="$2"
+            if [ -z "$token" ]; then
+              echo "$name: not set"
+              return
+            fi
+            local body status login
+            body=$(curl -sS -w '\n%{http_code}' -H "Authorization: Bearer $token" \
+              -H 'X-GitHub-Api-Version: 2022-11-28' https://api.github.com/user)
+            status=$(printf '%s' "$body" | tail -n1)
+            login=$(printf '%s' "$body" | sed '$d' | python3 -c 'import json,sys; print(json.load(sys.stdin).get("login","?"))' 2>/dev/null || echo '?')
+            if [ "$status" = "200" ]; then
+              echo "$name: valid (HTTP 200, account: $login)"
+            else
+              echo "$name: REJECTED (HTTP $status) — token is invalid, expired, or not authorised for this resource owner"
+            fi
+          }
+
+          check_github "COPILOT_TOKEN" "$COPILOT_TOKEN"
+          check_github "AGENT_TOKEN" "$AGENT_TOKEN"
+
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "ANTHROPIC_API_KEY: not set"
+          else
+            status=$(curl -sS -o /dev/null -w '%{http_code}' https://api.anthropic.com/v1/models \
+              -H "x-api-key: $ANTHROPIC_API_KEY" -H 'anthropic-version: 2023-06-01')
+            case "$status" in
+              200) echo "ANTHROPIC_API_KEY: valid (HTTP 200)" ;;
+              401) echo "ANTHROPIC_API_KEY: REJECTED (HTTP 401) — key is wrong or revoked" ;;
+              400) echo "ANTHROPIC_API_KEY: HTTP 400 — key reached the API but the request was rejected" ;;
+              *)   echo "ANTHROPIC_API_KEY: HTTP $status" ;;
+            esac
+          fi
+
+          echo "Note: a valid COPILOT_TOKEN still fails the Copilot session unless it carries the"
+          echo "Copilot Requests permission, which requires an active Copilot subscription."
+
       - name: Install GitHub Copilot CLI
         if: env.ZEROBUG_ENGINE == 'copilot'
         run: npm install -g @github/copilot

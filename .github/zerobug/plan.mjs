@@ -123,7 +123,15 @@ async function runClaude(prompt) {
     messages: [{ role: 'user', content: prompt }],
   });
 
-  const message = await stream.finalMessage();
+  let message;
+  try {
+    message = await stream.finalMessage();
+  } catch (error) {
+    // Surface what the API actually said — a bare SDK message hides the status and reason.
+    const status = error.status ? `HTTP ${error.status}` : 'request failed';
+    const detail = error.error?.error?.message ?? error.message;
+    throw new Error(`Anthropic API ${status}: ${detail}`);
+  }
 
   if (message.stop_reason === 'refusal') {
     throw new Error(`Claude declined the request (${message.stop_details?.category ?? 'unknown'}).`);
