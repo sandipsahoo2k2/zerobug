@@ -118,6 +118,17 @@ jobs:
           check_github "COPILOT_TOKEN" "$COPILOT_TOKEN"
           check_github "AGENT_TOKEN" "$AGENT_TOKEN"
 
+          # The Copilot CLI wants a fine-grained PAT (github_pat_). A classic token
+          # cannot carry the Copilot Requests permission at all, so naming the kind
+          # tells us whether the token could ever work. Only the kind is printed.
+          case "$COPILOT_TOKEN" in
+            '')            echo "COPILOT_TOKEN kind: not set" ;;
+            github_pat_*)  echo "COPILOT_TOKEN kind: fine-grained PAT (correct kind for the Copilot CLI)" ;;
+            ghp_*)         echo "COPILOT_TOKEN kind: CLASSIC PAT — cannot carry the Copilot Requests permission; create a fine-grained one" ;;
+            gho_*|ghu_*|ghs_*) echo "COPILOT_TOKEN kind: OAuth / installation token — not a PAT" ;;
+            *)             echo "COPILOT_TOKEN kind: unrecognised prefix" ;;
+          esac
+
           if [ -z "$ANTHROPIC_API_KEY" ]; then
             echo "ANTHROPIC_API_KEY: not set"
           else
@@ -133,6 +144,26 @@ jobs:
 
           echo "Note: a valid COPILOT_TOKEN still fails the Copilot session unless it carries the"
           echo "Copilot Requests permission, which requires an active Copilot subscription."
+          echo "Reading: /user 401 = the token is wrong. /user 200 + Copilot auth failure = the"
+          echo "token is fine and the account simply has no Copilot entitlement."
+
+      # Proves how the token is passed, independently of whether it is entitled.
+      - name: Probe the Copilot CLI
+        if: env.ZEROBUG_ENGINE == 'copilot'
+        continue-on-error: true
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_TOKEN }}
+          GH_TOKEN: ${{ secrets.COPILOT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.COPILOT_TOKEN }}
+        run: |
+          npm install -g @github/copilot >/dev/null 2>&1
+          echo "CLI version: $(copilot --version 2>&1 || echo unavailable)"
+          for var in COPILOT_GITHUB_TOKEN GH_TOKEN GITHUB_TOKEN; do
+            [ -n "$(eval echo \"\$$var\")" ] && echo "$var: passed to the CLI" || echo "$var: empty"
+          done
+          echo "--- one-shot session, exit code and message below ---"
+          copilot --allow-all-tools -p 'Reply with exactly: OK' 2>&1 | tail -20
+          echo "exit code: ${PIPESTATUS[0]}"
 
       - name: Install GitHub Copilot CLI
         if: env.ZEROBUG_ENGINE == 'copilot'
