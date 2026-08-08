@@ -168,6 +168,52 @@ and sent only to `api.github.com`. Jira credentials never reach the browser.
 
 ---
 
+## Who gets the ticket
+
+Once a plan names its suspect files, `owners.mjs` ranks who knows that code from the
+repository's own history — no model involved, since the history is a fact.
+
+Two signals per suspect file, combined:
+
+- **`git blame -w -C`** — how much of the file a person actually wrote. `-w` ignores
+  whitespace-only changes and `-C` follows code moved between files; without both, blame
+  credits whoever last reformatted.
+- **`git log --follow`** — commits touching the file, weighted by recency on a 180-day
+  half-life, so someone active last week outranks someone who touched it once a year ago.
+
+Bots are filtered. `users.noreply.github.com` is a real person's privacy address and is kept;
+bare `noreply@github.com` is automation and is dropped.
+
+The plan carries the top three with a one-line justification each, and the same list is written
+into the Jira description — so whoever picks up the ticket knows who to ask.
+
+### Assignment
+
+The top-ranked person gets the ticket, but only when the history is unambiguous. It falls back
+to the **default assignee** — set in the dashboard's Settings, or repo variable
+`DEFAULT_ASSIGNEE` — in four cases:
+
+| Case | Why |
+| --- | --- |
+| Scores tie | No basis to pick between them |
+| Top candidate is stale (>1 year) | They have most likely moved on |
+| No Jira account mapped for their git email | Guessing an accountId is never acceptable |
+| History names nobody | Nothing to go on |
+
+Map git emails to Jira accounts in `.github/zerobug/owners.json`:
+
+```json
+{ "someone@example.com": "5b10a2844c20165700ede21g" }
+```
+
+An unmapped author is still ranked and still shown — only the assignment falls back.
+
+**This ranks code familiarity, not who should do the work.** Git cannot see workload, leave, or
+team boundaries. Assignment is a starting point with its reasoning attached, not a verdict —
+both the plan and the Jira description say so.
+
+---
+
 ## Try it on the bundled defect
 
 `sample-app/` exists so you can exercise the whole thing without inventing a bug.

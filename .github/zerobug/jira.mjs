@@ -206,4 +206,45 @@ export async function updateDescription(jiraId, markdown) {
   throw new Error('Jira is not configured for writing.');
 }
 
+/**
+ * Assigns the issue. `accountId` must be a real Jira account ID — it comes from
+ * owners.json or the configured default, never from guessing at a git identity.
+ */
+export async function assignIssue(jiraId, accountId) {
+  if (mcpConfigured()) {
+    return withMcp(async (client, tools) => {
+      const tool = pickTool(tools, [/issue/i, /assign/i]);
+      if (tool) {
+        const props = Object.keys(tool.inputSchema?.properties ?? {});
+        const args = argFor(tool, /issue_?(key|id)|issueIdOrKey|^key$/i, jiraId, 'issue_key');
+        args[props.find((prop) => /account|assignee|user/i.test(prop)) ?? 'account_id'] = accountId;
+        await client.callTool({ name: tool.name, arguments: args });
+        return `mcp:${tool.name}`;
+      }
+
+      // No dedicated assign tool — fall back to a generic issue update.
+      const updateTool = pickTool(tools, [/issue/i, /update|edit/i]);
+      if (!updateTool) throw new Error('MCP server exposes no way to assign an issue.');
+      await client.callTool({
+        name: updateTool.name,
+        arguments: {
+          ...argFor(updateTool, /issue_?(key|id)|issueIdOrKey|^key$/i, jiraId, 'issue_key'),
+          fields: { assignee: { accountId } },
+        },
+      });
+      return `mcp:${updateTool.name}`;
+    });
+  }
+
+  if (restConfigured()) {
+    await restRequest(`/rest/api/3/issue/${encodeURIComponent(jiraId)}/assignee`, {
+      method: 'PUT',
+      body: JSON.stringify({ accountId }),
+    });
+    return 'rest';
+  }
+
+  throw new Error('Jira is not configured for assignment.');
+}
+
 export { adfToText, textToAdf };

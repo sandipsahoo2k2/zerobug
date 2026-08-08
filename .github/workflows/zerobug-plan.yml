@@ -16,6 +16,10 @@ on:
         default: plan
         type: choice
         options: [plan, publish]
+      default_assignee:
+        description: "Jira accountId to assign to when the history gives no clear owner (tie, stale, or unmapped)"
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -211,6 +215,8 @@ jobs:
         env:
           JIRA_ID: ${{ env.JIRA_ID }}
           MODE: ${{ inputs.mode }}
+          # Falls back to a repo-wide default when the dispatch leaves it empty.
+          DEFAULT_ASSIGNEE: ${{ inputs.default_assignee || vars.DEFAULT_ASSIGNEE }}
           PLAN_OUTPUT: ${{ runner.temp }}/plan.json
           EXISTING_PLAN_PATH: ${{ runner.temp }}/existing-plan.json
           # Jira MCP server (optional — empty means the REST path)

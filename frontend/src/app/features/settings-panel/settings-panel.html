@@ -33,6 +33,20 @@
       <input [value]="settings().plansBranch" (input)="set('plansBranch', $event)" />
     </label>
     <label class="wide">
+      Default assignee
+      <input
+        [value]="settings().defaultAssignee"
+        (input)="set('defaultAssignee', $event)"
+        placeholder="Jira accountId, e.g. 5b10a2844c20165700ede21g"
+      />
+      <small>
+        Used when the git history gives no clear owner — a tie, someone who has moved on, or an
+        author with no Jira account mapped in <code>.github/zerobug/owners.json</code>. Leave
+        empty to leave those tickets unassigned.
+      </small>
+    </label>
+
+    <label class="wide">
       GitHub token
       <input
         type="password"

@@ -53,6 +53,76 @@ ul.tight li {
   margin-bottom: 0.3rem;
 }
 
+.owners {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.owners li {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.owners p {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.rank {
+  display: inline-block;
+  margin-right: 0.5rem;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--accent);
+}
+
+.owners .muted {
+  margin-left: 0.4rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.tag {
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--warn) 20%, transparent);
+  color: var(--warn);
+  font-size: 0.68rem;
+}
+
+.assignment {
+  margin: 0.9rem 0 0;
+  font-size: 0.9rem;
+}
+
+.via {
+  margin-left: 0.35rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.failed {
+  display: block;
+  margin-top: 0.3rem;
+  color: var(--danger);
+  font-size: 0.82rem;
+}
+
+.caveat {
+  margin: 0.4rem 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 .steps {
   margin: 0;
   padding-left: 1.2rem;

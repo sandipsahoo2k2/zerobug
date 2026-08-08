@@ -16,7 +16,10 @@ export class SettingsPanel {
   readonly settings = this.settingsService.settings;
   readonly isConfigured = this.settingsService.isConfigured;
 
-  set(field: 'owner' | 'repo' | 'workflowFile' | 'ref' | 'plansBranch' | 'token', event: Event): void {
+  set(
+    field: 'owner' | 'repo' | 'workflowFile' | 'ref' | 'plansBranch' | 'defaultAssignee' | 'token',
+    event: Event,
+  ): void {
     const value = (event.target as HTMLInputElement).value;
     this.settingsService.update({ [field]: value });
   }

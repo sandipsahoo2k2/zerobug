@@ -2,7 +2,8 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync, appendFileSync } fr
 import { dirname, join } from 'node:path';
 import { assignToAgent, buildAgentBrief, createIssue, findCopilotAgent } from './agent.mjs';
 import { buildRepoContext } from './context.mjs';
-import { readIssue, updateDescription } from './jira.mjs';
+import { assignIssue, readIssue, updateDescription } from './jira.mjs';
+import { loadOwnerMap, rankOwners, resolveAssignee } from './owners.mjs';
 import { SCHEMA, generatePlan, mergeIntoDescription } from './plan.mjs';
 
 /**
@@ -105,6 +106,19 @@ async function main() {
     log(`Context: ${repoContext.length} chars. Starting the analysis session…`);
     plan = await generatePlan(issue, repoContext, engine);
     log(`Plan ready: ${plan.steps.length} steps, risk ${plan.riskLevel}.`);
+
+    // Ownership is derived from git, not from the engine — the history is a fact,
+    // and a suggested assignee should not be something a model invented.
+    plan.owners = rankOwners(plan.suspectFiles);
+    plan.assignment = resolveAssignee(plan.owners, {
+      defaultAssignee: (process.env.DEFAULT_ASSIGNEE ?? '').trim() || null,
+      ownerMap: loadOwnerMap(),
+    });
+    log(
+      plan.owners.length
+        ? `Owners: ${plan.owners.map((owner) => owner.name).join(', ')} — ${plan.assignment.via}`
+        : 'No owners found in the history of the suspect files.',
+    );
   }
 
   if (mode === 'publish') {
@@ -112,6 +126,22 @@ async function main() {
     const via = await updateDescription(jiraId, description);
     plan.jiraUpdated = true;
     log(`Jira description updated via ${via}.`);
+
+    // Assignment is a people decision, so a failure here must not lose the plan
+    // that was just written — record it and carry on.
+    if (plan.assignment?.assignee) {
+      try {
+        const assignedVia = await assignIssue(jiraId, plan.assignment.assignee);
+        plan.assignment.applied = true;
+        log(`Assigned to ${plan.assignment.assignee} via ${assignedVia}. ${plan.assignment.why}`);
+      } catch (error) {
+        plan.assignment.applied = false;
+        plan.assignment.error = error.message;
+        console.warn(`::warning::Plan published but assignment failed: ${error.message}`);
+      }
+    } else {
+      log(`Left unassigned: ${plan.assignment?.why ?? 'no candidate'}`);
+    }
   }
 
   mkdirSync(dirname(outputPath), { recursive: true });

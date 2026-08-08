@@ -10,6 +10,11 @@ export interface ZeroBugSettings {
   /** Branch the workflow commits `plans/<JIRA-ID>.json` to. */
   plansBranch: string;
   /**
+   * Jira accountId the ticket falls back to when the git history gives no clear
+   * owner — a tie, a candidate who has moved on, or one with no Jira account mapped.
+   */
+  defaultAssignee: string;
+  /**
    * Fine-grained PAT, this repo only, `actions:write` + `contents:read`.
    * Kept in localStorage — it is your own token in your own browser, never sent anywhere
    * except api.github.com.
@@ -23,5 +28,6 @@ export const DEFAULT_SETTINGS: ZeroBugSettings = {
   workflowFile: 'zerobug-plan.yml',
   ref: 'main',
   plansBranch: 'zerobug-plans',
+  defaultAssignee: '',
   token: '',
 };

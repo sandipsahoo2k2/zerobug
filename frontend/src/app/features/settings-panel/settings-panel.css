@@ -99,6 +99,14 @@ input:focus {
   outline-offset: 1px;
 }
 
+label small {
+  font-size: 0.72rem;
+  text-transform: none;
+  letter-spacing: normal;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
 .hint {
   margin: 1.25rem 0 0;
   font-size: 0.78rem;

@@ -28,6 +28,44 @@
     </section>
   }
 
+  @if (plan().owners?.length) {
+    <section>
+      <h3>Who knows this code</h3>
+      <ul class="owners">
+        @for (owner of plan().owners; track owner.email; let i = $index) {
+          <li>
+            <span class="rank">{{ i === 0 ? 'Closest to it' : i === 1 ? 'Also involved' : 'Worth asking' }}</span>
+            <strong>{{ owner.name }}</strong>
+            <span class="muted">{{ owner.email }}</span>
+            @if (owner.stale) {
+              <span class="tag">moved on?</span>
+            }
+            <p>{{ owner.reason }}</p>
+          </li>
+        }
+      </ul>
+
+      @if (plan().assignment; as assignment) {
+        <p class="assignment">
+          @if (assignment.assignee) {
+            <strong>Assigned to {{ assignment.displayName ?? assignment.assignee }}</strong>
+            <span class="via">via {{ assignment.via }}</span>
+          } @else {
+            <strong>Left unassigned</strong>
+          }
+          — {{ assignment.why }}.
+          @if (assignment.applied === false) {
+            <span class="failed">Jira rejected the assignment: {{ assignment.error }}</span>
+          }
+        </p>
+        <p class="caveat">
+          Ranked from this repository's git history, not from team structure or workload.
+          Reassign freely — the people above are the ones to ask either way.
+        </p>
+      }
+    </section>
+  }
+
   @if (plan().relatedCommits.length) {
     <section>
       <h3>Related commits</h3>

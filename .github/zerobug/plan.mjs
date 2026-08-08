@@ -176,6 +176,9 @@ function normalise(raw, issue, engine) {
     })),
     tests: asArray(raw.tests).map(String),
     rollback: String(raw.rollback ?? 'Revert the fix commit.'),
+    // Filled in from git history after the engine returns — see owners.mjs.
+    owners: [],
+    assignment: null,
     jiraUpdated: false,
   };
 }
@@ -228,6 +231,27 @@ export function planToMarkdown(plan) {
   if (plan.suspectFiles.length) {
     lines.push('### Suspect files');
     plan.suspectFiles.forEach((file) => lines.push(`- ${file.path} — ${file.reason}`));
+    lines.push('');
+  }
+
+  if (plan.owners?.length) {
+    lines.push('### Who knows this code');
+    plan.owners.forEach((owner, index) => {
+      const lead = index === 0 ? 'Closest to it' : index === 1 ? 'Also involved' : 'Worth asking';
+      lines.push(`- ${lead}: ${owner.name} (${owner.email}) — ${owner.reason}`);
+    });
+    if (plan.assignment) {
+      lines.push('');
+      lines.push(
+        plan.assignment.assignee
+          ? `Assigned to ${plan.assignment.displayName ?? plan.assignment.assignee} (${plan.assignment.via}): ${plan.assignment.why}.`
+          : `Left unassigned: ${plan.assignment.why}.`,
+      );
+      lines.push(
+        'Ranked from this repository\'s git history, not from team structure. If the ticket ' +
+          'landed on the wrong person, reassign it — the people above are the ones to ask.',
+      );
+    }
     lines.push('');
   }
 

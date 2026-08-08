@@ -1,0 +1,4 @@
+{
+  "_comment": "Maps a git author email to a Jira accountId. An author missing from this map is still ranked and shown in the plan, but the ticket falls back to the default assignee rather than guessing an account. Find an accountId in Jira: Profile -> the URL contains /people/<accountId>.",
+  "sandipsahoo2k2@gmail.com": ""
+}
