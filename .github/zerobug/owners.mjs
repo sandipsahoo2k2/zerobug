@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 /**
  * Works out who knows the code a defect lives in, from the repository's own history.
@@ -15,9 +16,27 @@ const HALF_LIFE_DAYS = 180;
 const STALE_DAYS = 365;
 const DAY_MS = 86_400_000;
 
+/**
+ * The workflow runs these scripts from `.github/zerobug`, but suspect paths are relative to
+ * the repository root. Without anchoring, every `git blame -- <path>` misses and the ranking
+ * silently comes back empty — which reads as "nobody owns this code" rather than as a bug.
+ */
+const REPO_ROOT = (() => {
+  if (process.env.GITHUB_WORKSPACE) return process.env.GITHUB_WORKSPACE;
+  try {
+    return execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
+  } catch {
+    return process.cwd();
+  }
+})();
+
 const git = (args) => {
   try {
-    return execFileSync('git', args, { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 }).trim();
+    return execFileSync('git', args, {
+      encoding: 'utf8',
+      maxBuffer: 32 * 1024 * 1024,
+      cwd: REPO_ROOT,
+    }).trim();
   } catch {
     return '';
   }
@@ -115,7 +134,8 @@ export function rankOwners(suspectFiles, limit = 3) {
   };
 
   for (const path of paths) {
-    if (!existsSync(path)) continue;
+    // Suspect paths come from the plan and are repo-root relative, like the git calls below.
+    if (!existsSync(resolve(REPO_ROOT, path))) continue;
 
     const { counts, total } = blameLines(path);
     for (const entry of counts.values()) {

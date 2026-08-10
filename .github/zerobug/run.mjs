@@ -4,14 +4,15 @@ import { assignToAgent, buildAgentBrief, createIssue, findCopilotAgent } from '.
 import { buildRepoContext } from './context.mjs';
 import { assignIssue, readIssue, updateDescription } from './jira.mjs';
 import { loadOwnerMap, rankOwners, resolveAssignee } from './owners.mjs';
-import { SCHEMA, generatePlan, mergeIntoDescription } from './plan.mjs';
+import { SCHEMA, generatePlan, mergeIntoDescription, normalise } from './plan.mjs';
 
 /**
  * Entry point for the ZeroBug workflow.
  *
- * Engines (ZEROBUG_ENGINE):
- *   claude  -> Anthropic API call from this runner. Needs no Copilot entitlement; the repo
- *              context carries the suspect source inline since the model cannot browse.
+ * Engines (ZEROBUG_ENGINE) — both are GitHub Copilot. There is no non-Copilot engine and
+ * no model fallback: we do not want to use a local/third-party LLM for coding, Copilot
+ * should work. A Copilot failure is a credential problem to fix, not one to route around.
+ *
  *   agent   -> opens a GitHub issue and assigns it to the Copilot coding agent. The session
  *              runs on GitHub's side and opens a PR containing plans/<JIRA-ID>.json, so this
  *              job finishes in seconds and the plan lands minutes later.
@@ -25,12 +26,22 @@ import { SCHEMA, generatePlan, mergeIntoDescription } from './plan.mjs';
 
 const jiraId = (process.env.JIRA_ID ?? '').trim().toUpperCase();
 const mode = (process.env.MODE ?? 'plan').trim().toLowerCase();
-const engine = (process.env.ZEROBUG_ENGINE ?? 'agent').trim().toLowerCase();
+// Same default as the workflow env block, so a local run behaves like a dispatched one.
+const engine = (process.env.ZEROBUG_ENGINE || 'copilot').trim().toLowerCase();
 const outputPath = process.env.PLAN_OUTPUT ?? join(process.env.RUNNER_TEMP ?? '.', 'plan.json');
 const existingPlanPath = process.env.EXISTING_PLAN_PATH ?? '';
 
 if (!/^[A-Z][A-Z0-9]+-\d+$/.test(jiraId)) {
   console.error(`Invalid Jira ID: "${jiraId}". Expected something like ZB-123.`);
+  process.exit(1);
+}
+
+if (!['agent', 'copilot'].includes(engine)) {
+  console.error(
+    `Unknown ZEROBUG_ENGINE "${engine}". Only "agent" and "copilot" exist — both are GitHub ` +
+      'Copilot. We do not want to use a local/third-party LLM for coding, so no other engine ' +
+      'is wired up on purpose.',
+  );
   process.exit(1);
 }
 
@@ -92,10 +103,15 @@ async function main() {
     return;
   }
 
-  let plan = mode === 'publish' ? loadStoredPlan() : null;
+  const stored = mode === 'publish' ? loadStoredPlan() : null;
+  let plan;
 
-  if (plan) {
-    log('Reusing the stored plan.');
+  if (stored) {
+    // The coding agent writes plans/<ID>.json itself, so unlike CLI output it never went
+    // through normalise(). Publishing it raw lets one missing key crash planToMarkdown
+    // halfway through — after the Jira write, in the worst case.
+    plan = normalise(stored, issue, stored.engine || 'copilot-swe-agent');
+    log(`Reusing the stored plan (${plan.engine}).`);
   } else if (mode === 'publish') {
     throw new Error(
       `No stored plan for ${jiraId}. Merge the agent's pull request, or run mode=plan first.`,
@@ -104,11 +120,15 @@ async function main() {
     log('Collecting repository context…');
     const repoContext = buildRepoContext(jiraId, issue);
     log(`Context: ${repoContext.length} chars. Starting the analysis session…`);
-    plan = await generatePlan(issue, repoContext, engine);
+    plan = await generatePlan(issue, repoContext);
     log(`Plan ready: ${plan.steps.length} steps, risk ${plan.riskLevel}.`);
+  }
 
-    // Ownership is derived from git, not from the engine — the history is a fact,
-    // and a suggested assignee should not be something a model invented.
+  // Ownership is derived from git, not from the engine — the history is a fact, and a
+  // suggested assignee should not be something a model invented. This runs for the agent
+  // engine too: its plan arrives by pull request with no owners on it, and that is the
+  // only chance to rank them before the Jira write below.
+  if (!plan.owners.length) {
     plan.owners = rankOwners(plan.suspectFiles);
     plan.assignment = resolveAssignee(plan.owners, {
       defaultAssignee: (process.env.DEFAULT_ASSIGNEE ?? '').trim() || null,

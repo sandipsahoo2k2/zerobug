@@ -1,10 +1,15 @@
 import { spawnSync } from 'node:child_process';
-import Anthropic from '@anthropic-ai/sdk';
 
 /**
  * Turns a Jira issue + repository context into a step-by-step fix plan.
- * Primary engine: a headless GitHub Copilot CLI session running inside the checked-out repo,
- * so it can open files and walk history itself. Fallback: the GitHub Models HTTP API.
+ * The only engine is a headless GitHub Copilot CLI session running inside the checked-out
+ * repo, so it can open files and walk history itself.
+ *
+ * DELIBERATE: there is no model fallback here, and none should be added.
+ * We do not want to use a local/third-party LLM for coding — GitHub Copilot should work.
+ * A Copilot failure is a credential or entitlement problem to fix, not something to route
+ * around: routing around it silently changes which model writes our code. If you came here
+ * to "restore" the Anthropic fallback, fix COPILOT_TOKEN instead.
  */
 
 const env = process.env;
@@ -102,8 +107,8 @@ function runCopilotCli(prompt) {
   if (result.error) throw new Error(`Copilot CLI failed to start: ${result.error.message}`);
 
   if (result.status !== 0) {
-    // Echo both streams in full — the thrown message is truncated, and when this
-    // failure is the reason for a fallback the detail is what explains it.
+    // Echo both streams in full — the thrown message is truncated, and this detail is
+    // the only thing that explains why the run failed.
     console.error('--- copilot stdout ---');
     console.error(result.stdout || '(empty)');
     console.error('--- copilot stderr ---');
@@ -112,43 +117,6 @@ function runCopilotCli(prompt) {
   }
 
   return result.stdout;
-}
-
-/**
- * Claude reads the context this script gathered rather than browsing the repo itself,
- * so the prompt carries the suspect source inline (see context.mjs).
- */
-async function runClaude(prompt) {
-  const client = new Anthropic();
-  const model = env.ZEROBUG_MODEL || 'claude-opus-5';
-
-  // Streamed because thinking is on by default on Opus 5 and counts against max_tokens;
-  // a non-streaming request this size risks an HTTP timeout.
-  const stream = client.messages.stream({
-    model,
-    max_tokens: 32000,
-    system: 'You are a senior engineer triaging a defect. You output a single JSON object and nothing else.',
-    messages: [{ role: 'user', content: prompt }],
-  });
-
-  let message;
-  try {
-    message = await stream.finalMessage();
-  } catch (error) {
-    // Surface what the API actually said — a bare SDK message hides the status and reason.
-    const status = error.status ? `HTTP ${error.status}` : 'request failed';
-    const detail = error.error?.error?.message ?? error.message;
-    throw new Error(`Anthropic API ${status}: ${detail}`);
-  }
-
-  if (message.stop_reason === 'refusal') {
-    throw new Error(`Claude declined the request (${message.stop_details?.category ?? 'unknown'}).`);
-  }
-
-  return message.content
-    .filter((block) => block.type === 'text')
-    .map((block) => block.text)
-    .join('\n');
 }
 
 const asArray = (value) => (Array.isArray(value) ? value : []);
@@ -176,43 +144,36 @@ function normalise(raw, issue, engine) {
     })),
     tests: asArray(raw.tests).map(String),
     rollback: String(raw.rollback ?? 'Revert the fix commit.'),
-    // Filled in from git history after the engine returns — see owners.mjs.
-    owners: [],
-    assignment: null,
-    jiraUpdated: false,
+    // Filled in from git history after the engine returns — see owners.mjs. Kept when
+    // present because this also normalises a plan read back from the plans branch, and
+    // that one has already been through owner ranking.
+    owners: asArray(raw.owners),
+    assignment: raw.assignment ?? null,
+    jiraUpdated: Boolean(raw.jiraUpdated),
   };
 }
 
-const claudeLabel = () => `anthropic:${env.ZEROBUG_MODEL || 'claude-opus-5'}`;
+/** Printed on every plan run and again on failure, so the rule is impossible to miss. */
+const NO_FALLBACK_NOTICE =
+  'We do not want to use a local/third-party LLM for coding — GitHub Copilot should work. ' +
+  'There is no model fallback by design; if the Copilot session fails, fix the Copilot ' +
+  'credential or entitlement instead of adding one back.';
 
 /**
- * Produces the plan. `copilot` is preferred because that session runs inside the
- * checkout and can open files itself; if it cannot run — no Copilot entitlement,
- * expired token, CLI failure — the Anthropic API takes over.
- *
- * The fallback is never silent: whichever engine produced the plan is recorded in
- * its `engine` field, and a fallback says so.
+ * Produces the plan with the Copilot CLI, which runs inside the checkout and can open
+ * files itself. If it cannot run — no Copilot entitlement, expired token, CLI failure —
+ * the run fails. That is intentional; see NO_FALLBACK_NOTICE and the header comment.
  */
-export async function generatePlan(issue, repoContext, engine = 'copilot') {
+export async function generatePlan(issue, repoContext) {
   const prompt = buildPrompt(issue, repoContext);
 
-  if (engine === 'claude') {
-    console.log(`Engine: Anthropic API (${claudeLabel()})`);
-    return normalise(extractJson(await runClaude(prompt)), issue, claudeLabel());
-  }
+  console.log('Engine: GitHub Copilot CLI session (the only engine)');
+  console.log(`::notice::${NO_FALLBACK_NOTICE}`);
 
   try {
-    console.log('Engine: GitHub Copilot CLI session');
     return normalise(extractJson(runCopilotCli(prompt)), issue, 'copilot-cli');
   } catch (error) {
-    if (!env.ANTHROPIC_API_KEY) {
-      throw new Error(
-        `Copilot CLI failed and no ANTHROPIC_API_KEY is set to fall back to. ${error.message}`,
-      );
-    }
-    console.warn(`::warning::Copilot CLI unusable, falling back to the Anthropic API. ${error.message}`);
-    const plan = normalise(extractJson(await runClaude(prompt)), issue, `${claudeLabel()} (fallback from copilot-cli)`);
-    return plan;
+    throw new Error(`Copilot CLI could not produce a plan. ${NO_FALLBACK_NOTICE} ${error.message}`);
   }
 }
 

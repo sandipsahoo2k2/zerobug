@@ -1,9 +1,28 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+/**
+ * The workflow runs these scripts from `.github/zerobug`. `git grep`, `git log -- .` and
+ * `ls-tree` are all scoped to the working directory, so without anchoring to the checkout
+ * root the "repository context" would only ever describe ZeroBug's own scripts.
+ */
+const REPO_ROOT = (() => {
+  if (process.env.GITHUB_WORKSPACE) return process.env.GITHUB_WORKSPACE;
+  try {
+    return execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
+  } catch {
+    return process.cwd();
+  }
+})();
 
 const git = (args, fallback = '') => {
   try {
-    return execFileSync('git', args, { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }).trim();
+    return execFileSync('git', args, {
+      encoding: 'utf8',
+      maxBuffer: 16 * 1024 * 1024,
+      cwd: REPO_ROOT,
+    }).trim();
   } catch {
     return fallback;
   }
@@ -91,7 +110,8 @@ function fileSources(paths, limit = 4, maxBytes = 24_000) {
   const blocks = [];
   for (const path of paths.slice(0, limit)) {
     try {
-      const source = readFileSync(path, 'utf8');
+      // git reports paths from the repository root, not from the working directory.
+      const source = readFileSync(resolve(REPO_ROOT, path), 'utf8');
       const clipped = source.length > maxBytes ? `${source.slice(0, maxBytes)}\n… (truncated)` : source;
       blocks.push(`### ${path}\n\`\`\`\n${clipped}\n\`\`\``);
     } catch {

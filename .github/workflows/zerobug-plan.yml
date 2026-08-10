@@ -32,10 +32,13 @@ concurrency:
 
 env:
   PLANS_BRANCH: zerobug-plans
-  # copilot = headless Copilot CLI session in this runner (default), falling back to the
-  #           Anthropic API when Copilot cannot run
-  # claude  = Anthropic API only, no Copilot attempt
+  # copilot = headless Copilot CLI session in this runner (default)
   # agent   = Copilot coding agent session on GitHub's infrastructure
+  #
+  # Both engines are GitHub Copilot, and there is no model fallback on purpose:
+  # we do not want to use a local/third-party LLM for coding — Copilot should work.
+  # If a run fails on Copilot, fix COPILOT_TOKEN / the Copilot seat. Do not wire an
+  # Anthropic (or any other) key back in as a fallback.
   ZEROBUG_ENGINE: ${{ vars.ZEROBUG_ENGINE || 'copilot' }}
 
 jobs:
@@ -70,25 +73,26 @@ jobs:
         working-directory: .github/zerobug
         run: npm install --omit=dev --no-audit --no-fund
 
+      # jira.mjs launches the MCP server over stdio, so whatever runs it has to exist on the
+      # runner. `uvx` does not ship with ubuntu-latest; npx-based servers need nothing extra.
+      - name: Set up uv for the Jira MCP server
+        if: startsWith(vars.JIRA_MCP_COMMAND, 'uvx')
+        uses: astral-sh/setup-uv@v5
+
       - name: Check the engine credential
         env:
           COPILOT_TOKEN: ${{ secrets.COPILOT_TOKEN }}
           AGENT_TOKEN: ${{ secrets.AGENT_TOKEN }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MODE: ${{ inputs.mode }}
         run: |
-          if [ "$ZEROBUG_ENGINE" = "claude" ] && [ -z "$ANTHROPIC_API_KEY" ]; then
-            echo "::error::ZEROBUG_ENGINE=claude needs ANTHROPIC_API_KEY (https://platform.claude.com -> API keys)."
+          echo "::notice::We do not want to use a local/third-party LLM for coding — GitHub Copilot should work. There is no model fallback by design; a failure here means the Copilot credential needs fixing."
+          # publish mode only rewrites Jira from a plan that already exists, so it needs
+          # no Copilot credential at all — only mode=plan runs a session.
+          if [ "$MODE" = "plan" ] && [ "$ZEROBUG_ENGINE" = "copilot" ] && [ -z "$COPILOT_TOKEN" ]; then
+            echo "::error::ZEROBUG_ENGINE=copilot needs COPILOT_TOKEN (fine-grained PAT with the Copilot Requests permission). There is no fallback engine on purpose."
             exit 1
           fi
-          # The copilot engine falls back to the Anthropic API, so either credential is enough.
-          if [ "$ZEROBUG_ENGINE" = "copilot" ] && [ -z "$COPILOT_TOKEN" ] && [ -z "$ANTHROPIC_API_KEY" ]; then
-            echo "::error::ZEROBUG_ENGINE=copilot needs COPILOT_TOKEN (fine-grained PAT with the Copilot Requests permission), or ANTHROPIC_API_KEY to fall back to."
-            exit 1
-          fi
-          if [ "$ZEROBUG_ENGINE" = "copilot" ] && [ -z "$COPILOT_TOKEN" ]; then
-            echo "::notice::COPILOT_TOKEN is not set — the Copilot attempt will fail and the run will fall back to the Anthropic API."
-          fi
-          if [ "$ZEROBUG_ENGINE" = "agent" ] && [ -z "$AGENT_TOKEN" ] && [ -z "$COPILOT_TOKEN" ]; then
+          if [ "$MODE" = "plan" ] && [ "$ZEROBUG_ENGINE" = "agent" ] && [ -z "$AGENT_TOKEN" ] && [ -z "$COPILOT_TOKEN" ]; then
             echo "::error::ZEROBUG_ENGINE=agent needs AGENT_TOKEN (a PAT that can create issues and assign the Copilot coding agent)."
             exit 1
           fi
@@ -99,7 +103,6 @@ jobs:
         env:
           COPILOT_TOKEN: ${{ secrets.COPILOT_TOKEN }}
           AGENT_TOKEN: ${{ secrets.AGENT_TOKEN }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           # Everything below lands in the run summary as well as the log, so the
           # verdict is on the run page without opening the raw log.
@@ -136,23 +139,12 @@ jobs:
             *)             echo "COPILOT_TOKEN kind: unrecognised prefix" ;;
           esac
 
-          if [ -z "$ANTHROPIC_API_KEY" ]; then
-            echo "ANTHROPIC_API_KEY: not set"
-          else
-            status=$(curl -sS -o /dev/null -w '%{http_code}' https://api.anthropic.com/v1/models \
-              -H "x-api-key: $ANTHROPIC_API_KEY" -H 'anthropic-version: 2023-06-01')
-            case "$status" in
-              200) echo "ANTHROPIC_API_KEY: valid (HTTP 200)" ;;
-              401) echo "ANTHROPIC_API_KEY: REJECTED (HTTP 401) — key is wrong or revoked" ;;
-              400) echo "ANTHROPIC_API_KEY: HTTP 400 — key reached the API but the request was rejected" ;;
-              *)   echo "ANTHROPIC_API_KEY: HTTP $status" ;;
-            esac
-          fi
-
           echo "Note: a valid COPILOT_TOKEN still fails the Copilot session unless it carries the"
           echo "Copilot Requests permission, which requires an active Copilot subscription."
           echo "Reading: /user 401 = the token is wrong. /user 200 + Copilot auth failure = the"
           echo "token is fine and the account simply has no Copilot entitlement."
+          echo "Either way the fix is the Copilot credential: we do not want to use a local or"
+          echo "third-party LLM for coding, so there is no fallback engine to fall through to."
 
       - name: Publish the credential diagnostics
         if: always()
@@ -165,8 +157,9 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       # Proves how the token is passed, independently of whether it is entitled.
+      # Only mode=plan runs a CLI session, so publish skips the probe and the install.
       - name: Probe the Copilot CLI
-        if: env.ZEROBUG_ENGINE == 'copilot'
+        if: env.ZEROBUG_ENGINE == 'copilot' && inputs.mode == 'plan'
         continue-on-error: true
         env:
           COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_TOKEN }}
@@ -195,11 +188,13 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Install GitHub Copilot CLI
-        if: env.ZEROBUG_ENGINE == 'copilot'
+        if: env.ZEROBUG_ENGINE == 'copilot' && inputs.mode == 'plan'
         run: npm install -g @github/copilot
 
       - name: Look for a plan the agent already produced (publish mode)
         if: inputs.mode == 'publish'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           for REF in "origin/$PLANS_BRANCH" origin/main; do
             if git fetch origin "${REF#origin/}" --depth=1 2>/dev/null &&
@@ -208,6 +203,22 @@ jobs:
               exit 0
             fi
           done
+
+          # The coding agent leaves its plan on the branch behind its pull request, and the
+          # dashboard already renders it from there. Publish has to read the same place, or
+          # pressing "Publish plan to Jira" fails on a plan the user is looking at.
+          HEAD_REF=$(gh pr list --state open --limit 50 --json title,body,headRefName \
+            --jq "[.[] | select(((.title + \" \" + (.body // \"\")) | ascii_upcase) | contains(\"$JIRA_ID\"))] | .[0].headRefName // empty" \
+            2>/dev/null || true)
+
+          if [ -n "$HEAD_REF" ] && git fetch origin "$HEAD_REF" --depth=1 2>/dev/null &&
+             git show "FETCH_HEAD:plans/$JIRA_ID.json" > "$RUNNER_TEMP/existing-plan.json" 2>/dev/null; then
+            echo "Found plans/$JIRA_ID.json on the agent's pull request branch $HEAD_REF"
+            exit 0
+          fi
+
+          # A failed `git show` still leaves the redirect's empty file behind.
+          rm -f "$RUNNER_TEMP/existing-plan.json"
           echo "No stored plan found yet for $JIRA_ID"
 
       - name: Read Jira and run the analysis
@@ -228,9 +239,6 @@ jobs:
           JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
           JIRA_USERNAME: ${{ secrets.JIRA_EMAIL }}
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-          # Anthropic API engine
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          ZEROBUG_MODEL: ${{ vars.ZEROBUG_MODEL }}
           # Coding agent: needs a real user PAT, the built-in token cannot assign the agent
           AGENT_TOKEN: ${{ secrets.AGENT_TOKEN || secrets.COPILOT_TOKEN }}
           # Copilot CLI reads COPILOT_GITHUB_TOKEN first, then GH_TOKEN / GITHUB_TOKEN
