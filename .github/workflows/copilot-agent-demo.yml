@@ -1,0 +1,76 @@
+name: Copilot agent demo
+
+# The whole point of this file is its length.
+#
+# zerobug-plan.yml is ~280 lines plus six .mjs modules, because it has a contract to keep:
+# read Jira, gather context deterministically, emit JSON against a schema, rank owners from
+# git, write back, stay debuggable when a token is wrong. That is a pipeline.
+#
+# This is the other end. One dispatch input, one Copilot session, one answer in the job
+# summary. No schema, no parsing, no branch to commit to. The agent opens files and runs
+# git itself — the session is inside the checkout, so nothing has to be handed to it.
+#
+# Run it: Actions -> Copilot agent demo -> Run workflow. Leave the default task to point it
+# at the bundled defect in sample-app/, or type your own question.
+
+run-name: "Copilot demo: ${{ inputs.task }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "What should the agent do?"
+        required: true
+        default: >-
+          Something is wrong with the discount thresholds in sample-app/. Find it.
+          Name the file and line, say what the code does versus what docs/pricing-rules.md
+          promises, and name the commit that introduced it. Do not change any files.
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  ask:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      # fetch-depth 0 because "which commit introduced this" needs the history, not a snapshot.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - run: npm install -g @github/copilot
+
+      - name: Ask the agent
+        env:
+          # Never interpolate an input into a shell script — it arrives as an env var instead.
+          TASK: ${{ inputs.task }}
+          # The CLI reads COPILOT_GITHUB_TOKEN first, then GH_TOKEN / GITHUB_TOKEN.
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_TOKEN }}
+          GH_TOKEN: ${{ secrets.COPILOT_TOKEN }}
+        run: |
+          if [ -z "$COPILOT_GITHUB_TOKEN" ]; then
+            echo "::error::COPILOT_TOKEN is not set. Fine-grained PAT with the Copilot Requests permission, from an account with a Copilot seat."
+            exit 1
+          fi
+
+          # --allow-all-tools lets the session read files and run git without prompting.
+          # It is running against a read-only checkout on a throwaway runner.
+          copilot --allow-all-tools -p "$TASK" 2>&1 | tee answer.txt
+
+          {
+            echo "## What the agent found"
+            echo
+            echo "**Task:** $TASK"
+            echo
+            echo '```'
+            # Strip the ANSI colour codes the CLI writes, or the summary renders as noise.
+            sed $'s/\033\[[0-9;]*[A-Za-z]//g' answer.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

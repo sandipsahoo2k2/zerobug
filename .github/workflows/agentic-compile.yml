@@ -1,0 +1,72 @@
+name: Compile agentic workflows
+
+# gh-aw workflows are written as Markdown and compiled into a real Actions workflow —
+# `pricing-detective.md` -> `pricing-detective.lock.yml`. The .lock.yml is what GitHub
+# actually runs, and it is generated, so it is never edited by hand.
+#
+# Compiling normally means running `gh aw compile` on your own machine. This does it on a
+# runner instead, so you do not need the gh CLI installed locally.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      # The push at the end writes into .github/workflows/, which the built-in GITHUB_TOKEN
+      # is not allowed to do — that needs a PAT carrying the Workflows permission. Falls back
+      # to the built-in token so the compile and the artifact still work without one.
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.AGENT_TOKEN || secrets.COPILOT_TOKEN || github.token }}
+
+      - name: Install the gh-aw extension
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh extension install github/gh-aw
+          gh aw version || true
+
+      - name: Compile every .md workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh aw compile
+          echo "## Generated" >> "$GITHUB_STEP_SUMMARY"
+          ls -la .github/workflows/*.lock.yml >> "$GITHUB_STEP_SUMMARY" 2>&1 || \
+            echo "no .lock.yml produced — check the compile output above" >> "$GITHUB_STEP_SUMMARY"
+
+      # Kept regardless of whether the push below is allowed, so the compiled file is always
+      # recoverable from the run page.
+      - name: Upload the compiled workflow
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compiled-agentic-workflows
+          path: .github/workflows/*.lock.yml
+          if-no-files-found: warn
+
+      - name: Commit the compiled workflow
+        continue-on-error: true
+        run: |
+          git config user.name "zerobug[bot]"
+          git config user.email "zerobug@users.noreply.github.com"
+          git add .github/workflows/*.lock.yml
+
+          if git diff --cached --quiet; then
+            echo "Nothing changed — the compiled workflow is already committed."
+            exit 0
+          fi
+
+          git commit -m "build: compile agentic workflows"
+          if git push; then
+            echo "Pushed. The agentic workflow now shows up under Actions."
+          else
+            echo "::warning::Push refused. Writing to .github/workflows/ needs a PAT with the Workflows permission — set AGENT_TOKEN, or download the artifact from this run and commit it yourself."
+          fi
