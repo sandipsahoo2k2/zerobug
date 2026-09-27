@@ -20,6 +20,11 @@ on:
         description: "Jira accountId to assign to when the history gives no clear owner (tie, stale, or unmapped)"
         required: false
         type: string
+      with_fix:
+        description: "If true, the agent will also implement the fix in its pull request"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -226,6 +231,7 @@ jobs:
         env:
           JIRA_ID: ${{ env.JIRA_ID }}
           MODE: ${{ inputs.mode }}
+          WITH_FIX: ${{ inputs.with_fix }}
           # Falls back to a repo-wide default when the dispatch leaves it empty.
           DEFAULT_ASSIGNEE: ${{ inputs.default_assignee || vars.DEFAULT_ASSIGNEE }}
           PLAN_OUTPUT: ${{ runner.temp }}/plan.json

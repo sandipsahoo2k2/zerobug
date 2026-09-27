@@ -18,10 +18,10 @@ export class GithubApiService {
   private readonly settingsService = inject(SettingsService);
 
   /** Fires the workflow. GitHub answers 204 with no body — the run is found by polling. */
-  dispatchWorkflow(jiraId: string, mode: 'plan' | 'publish'): Observable<void> {
+  dispatchWorkflow(jiraId: string, mode: 'plan' | 'publish', withFix: boolean = false): Observable<void> {
     const { owner, repo, workflowFile, ref, defaultAssignee } = this.settingsService.settings();
     // Workflow inputs must be strings; omit the assignee entirely when unset.
-    const inputs: Record<string, string> = { jira_id: jiraId, mode };
+    const inputs: Record<string, string> = { jira_id: jiraId, mode, with_fix: String(withFix) };
     if (defaultAssignee.trim()) {
       inputs['default_assignee'] = defaultAssignee.trim();
     }

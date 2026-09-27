@@ -26,6 +26,7 @@ import { SCHEMA, generatePlan, mergeIntoDescription, normalise } from './plan.mj
 
 const jiraId = (process.env.JIRA_ID ?? '').trim().toUpperCase();
 const mode = (process.env.MODE ?? 'plan').trim().toLowerCase();
+const withFix = (process.env.WITH_FIX ?? 'false').trim().toLowerCase() === 'true';
 // Same default as the workflow env block, so a local run behaves like a dispatched one.
 const engine = (process.env.ZEROBUG_ENGINE || 'copilot').trim().toLowerCase();
 const outputPath = process.env.PLAN_OUTPUT ?? join(process.env.RUNNER_TEMP ?? '.', 'plan.json');
@@ -81,7 +82,7 @@ async function dispatchAgentSession(issue) {
   const repoContext = buildRepoContext(jiraId, issue);
   const created = await createIssue(owner, repo, token, {
     title: `[${jiraId}] ${issue.summary}`,
-    body: buildAgentBrief(jiraId, issue, repoContext, SCHEMA),
+    body: buildAgentBrief(jiraId, issue, repoContext, SCHEMA, withFix),
   });
   log(`Tracking issue #${created.number}: ${created.html_url}`);
 

@@ -19,6 +19,11 @@
       {{ busy() ? 'Working…' : 'Analyse defect' }}
     </button>
     <button type="button" (click)="loadExisting()" [disabled]="busy()">Load saved plan</button>
+    
+    <label class="checkbox" style="flex-basis: 100%; margin-top: 0.5rem; display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+      <input type="checkbox" [checked]="withFixInput()" (change)="onWithFixChange($event)" [disabled]="busy()" style="flex: 0 0 auto;" />
+      Also create a PR with the fix (requires Copilot agent)
+    </label>
   </form>
 
   @if (!isConfigured()) {

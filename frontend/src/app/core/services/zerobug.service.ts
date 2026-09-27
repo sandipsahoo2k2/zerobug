@@ -45,7 +45,7 @@ export class ZeroBugService {
   readonly canPublish = computed(() => this.phaseState() === 'done' && this.planState() !== null);
 
   /** Runs the Copilot analysis for a Jira issue and loads the resulting plan. */
-  async startAnalysis(rawJiraId: string): Promise<void> {
+  async startAnalysis(rawJiraId: string, withFix: boolean = false): Promise<void> {
     const jiraId = normalize(rawJiraId);
     if (!jiraId) {
       this.fail('Enter a Jira ID, e.g. ZB-123.');
@@ -53,7 +53,7 @@ export class ZeroBugService {
     }
 
     this.reset(jiraId);
-    await this.runJob(jiraId, 'plan', 'Analysing defect with the Copilot session…');
+    await this.runJob(jiraId, 'plan', 'Analysing defect with the Copilot session…', withFix);
   }
 
   /** Re-runs the workflow in publish mode: writes the stored plan into the Jira description. */
@@ -62,7 +62,7 @@ export class ZeroBugService {
     if (!jiraId) return;
 
     this.errorState.set(null);
-    await this.runJob(jiraId, 'publish', 'Writing the plan into the Jira description…');
+    await this.runJob(jiraId, 'publish', 'Writing the plan into the Jira description…', false);
   }
 
   /** Loads a previously generated plan without running the workflow again. */
@@ -82,13 +82,13 @@ export class ZeroBugService {
     }
   }
 
-  private async runJob(jiraId: string, mode: 'plan' | 'publish', startMessage: string): Promise<void> {
+  private async runJob(jiraId: string, mode: 'plan' | 'publish', startMessage: string, withFix: boolean = false): Promise<void> {
     this.phaseState.set('dispatching');
     this.append(startMessage);
 
     const dispatchedAt = Date.now() - 60_000;
     try {
-      await firstValueFrom(this.github.dispatchWorkflow(jiraId, mode));
+      await firstValueFrom(this.github.dispatchWorkflow(jiraId, mode, withFix));
       this.append(`Workflow dispatched (mode: ${mode}).`);
     } catch (error) {
       this.fail(`Could not dispatch the workflow. ${describe(error)}`);

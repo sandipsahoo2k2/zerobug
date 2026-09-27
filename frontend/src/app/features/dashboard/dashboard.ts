@@ -26,6 +26,7 @@ export class Dashboard {
   private readonly settingsService = inject(SettingsService);
 
   readonly jiraIdInput = signal('');
+  readonly withFixInput = signal(false);
   readonly phase = this.zeroBug.phase;
   readonly run = this.zeroBug.run;
   readonly agentPr = this.zeroBug.agentPr;
@@ -45,9 +46,13 @@ export class Dashboard {
     this.jiraIdInput.set((event.target as HTMLInputElement).value);
   }
 
+  onWithFixChange(event: Event): void {
+    this.withFixInput.set((event.target as HTMLInputElement).checked);
+  }
+
   start(): void {
     if (!this.canStart()) return;
-    void this.zeroBug.startAnalysis(this.jiraIdInput());
+    void this.zeroBug.startAnalysis(this.jiraIdInput(), this.withFixInput());
   }
 
   loadExisting(): void {

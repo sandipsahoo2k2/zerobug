@@ -67,8 +67,12 @@ export async function findCopilotAgent(owner, repo, token) {
 }
 
 /** The brief the agent works from. */
-export function buildAgentBrief(jiraId, issue, repoContext, schema) {
-  return `Jira ${jiraId} reports a defect in this repository. Investigate it and commit a fix plan.
+export function buildAgentBrief(jiraId, issue, repoContext, schema, withFix = false) {
+  const instructions = withFix
+    ? `2. Write the fix for this defect in the code.\n3. Also produce a step-by-step fix plan that explains what you did. Write your plan to \`plans/${jiraId}.json\` — this plan file and the code fixes should be in your pull request.`
+    : `2. Do **not** fix the code. Produce a plan an engineer can follow.\n3. Write your plan to \`plans/${jiraId}.json\` — that file is the only change in your pull request.`;
+
+  return `Jira ${jiraId} reports a defect in this repository. Investigate it and commit a fix plan${withFix ? ' and the code fix' : ''}.
 
 ## The defect
 **${issue.summary}**
@@ -79,8 +83,7 @@ ${issue.description || '(no description)'}
 
 ## What to do
 1. Read the code and the git history around this defect. Find where it actually lives.
-2. Do **not** fix the code. Produce a plan an engineer can follow.
-3. Write your plan to \`plans/${jiraId}.json\` — that file is the only change in your pull request.
+${instructions}
 
 The file must be a single JSON object in exactly this shape:
 
