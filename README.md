@@ -155,7 +155,7 @@ a seat GitHub checks server-side. The plan's `engine` field records what produce
 | --- | --- | --- |
 | Where the session runs | Copilot CLI inside this Actions runner | GitHub's infrastructure, visible in the repo's **Agents → Sessions** tab |
 | Run length | 1–4 min, plan ready when the job ends | seconds — the job only files a tracking issue and assigns `copilot-swe-agent` |
-| How the plan arrives | committed to the `zerobug-plans` branch | a pull request adding `plans/<JIRA-ID>.json` |
+| How the plan arrives | committed to the `zerobug-plans` branch | a pull request adding `plans/<JIRA-ID>.json` (and optionally the code fix) |
 | Credential | `COPILOT_TOKEN` | `AGENT_TOKEN` (a real user PAT) |
 | Reads the repo | opens files itself in the checkout | opens files itself in its own checkout |
 
@@ -190,7 +190,7 @@ and sent only to `api.github.com`. Jira credentials never reach the browser.
 
 ### 7. Use it
 
-1. Enter a Jira ID, e.g. `ZB-123`, press **Analyse defect**.
+1. Enter a Jira ID, e.g. `ZB-123`, and optionally check **Also create a PR with the fix**. Press **Analyse defect**.
 2. The dashboard dispatches `zerobug-plan.yml` in `plan` mode and follows the run.
    With `ZEROBUG_ENGINE=agent` the run finishes in seconds — it only opens a tracking issue and
    assigns the Copilot coding agent. The session then works on GitHub's side and opens a pull
@@ -211,7 +211,7 @@ With `ZEROBUG_ENGINE=agent`, one defect takes two dispatches:
 | # | What happens | Where you see it |
 | --- | --- | --- |
 | 1 | **Analyse defect** → `mode=plan`. `run.mjs` reads Jira, builds repo context, files a tracking issue titled `[ZB-123] <summary>`, assigns `copilot-swe-agent`. Job ends in seconds. | Actions run, then repo **Issues** |
-| 2 | The coding agent session opens the repo, reads code and history, writes `plans/ZB-123.json`, opens a PR titled `ZeroBug plan for ZB-123`. | repo **Agents → Sessions**, then **Pull requests** |
+| 2 | The coding agent session opens the repo, reads code and history, writes `plans/ZB-123.json`, opens a PR titled `ZeroBug plan for ZB-123`. If the fix option was checked, this PR also contains the code fix. | repo **Agents → Sessions**, then **Pull requests** |
 | 3 | The dashboard finds that PR by Jira ID and renders the plan straight off its head branch. | dashboard |
 | 4 | **Publish plan to Jira** → `mode=publish`. Reads the same plan (plans branch, `main`, *or the open PR's branch*), normalises it, ranks owners from git, writes the description, assigns the Jira issue. | Actions run, then Jira |
 
